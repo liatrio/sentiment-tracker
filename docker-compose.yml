@@ -1,0 +1,11 @@
+version: '3'
+
+services:
+  slackbot:
+    build: .
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+    # Restart policy to ensure the bot stays running
+    restart: unless-stopped
