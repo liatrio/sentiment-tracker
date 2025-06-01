@@ -50,16 +50,28 @@ The architecture should support future customization of questions.
 - **Framework**: Bolt for Python (building on existing Slackbot project)
 - **Deployment**: Containerized for deployment in in-house Kubernetes cluster
 - **Multi-team Support**: Must handle multiple teams using the bot simultaneously
+- **Scaling**: Single instance with vertical scaling if needed
 
-### 2. Data Storage
-- **Database**: Cloud-based NoSQL database (DynamoDB or MongoDB Atlas)
-- **Data Model**:
-  - Teams collection: Team ID, team name, configuration settings
-  - Feedback sessions collection: Session ID, team ID, timestamp, duration, channel ID
-  - Responses collection: Response ID, session ID, user ID (hashed), sentiment score, positive feedback, improvement feedback, timestamp
-  - Reports collection: Report ID, session ID, summary, themes, anonymized quotes, statistics
-- **Historical Data**: Store data for trend analysis over time
-- **Retention Policy**: Configurable data retention policies set by workspace admins
+### 2. In-Memory Data Management
+- **Storage Approach**: Thread-safe in-memory dictionary
+- **Data Structure**:
+  - Simple dictionary with session IDs as keys
+  - Each session contains: team members, responses received, time window information
+- **Session Management**:
+  - Maximum concurrent sessions: 50 (configurable via environment variables)
+  - Automatic cleanup of sessions older than 24 hours (configurable)
+  - Cleanup check triggered when new sessions are created
+- **Concurrency Implementation**:
+  - Shared dictionary protected by locks for thread safety
+  - Each feedback collection session runs in its own worker thread
+  - Main application thread handles incoming requests
+  - Thread-safe callbacks update the shared memory store when responses arrive
+  - Non-blocking timer implementation using scheduled tasks/callbacks
+- **Persistence**: 
+  - No persistence across application restarts
+  - Users must restart feedback collection if application restarts
+  - Reports are stored in Slack message history only
+- **Configuration**: All settings managed via environment variables
 
 ### 3. AI Integration
 - **Provider**: OpenAI
@@ -71,15 +83,15 @@ The architecture should support future customization of questions.
 - **Implementation**:
   - API integration with appropriate rate limiting and error handling
   - Prompt engineering for consistent results
-  - Fallback mechanisms if AI service is unavailable
+  - Fallback mechanism: If OpenAI is unavailable, report raw data without AI analysis
 
 ### 4. Security & Privacy
 - **Access Control**: For MVP, any team member can trigger sentiment collection
 - **Data Privacy**:
   - All individual feedback anonymized in reports
-  - User IDs hashed in database
+  - No persistent storage of user responses
   - AI-based rewriting of quotes to further mask identity
-- **Data Retention**: Configurable retention periods
+- **Data Handling**: All data cleared from memory after report generation
 
 ## Implementation Details
 
@@ -106,28 +118,32 @@ The architecture should support future customization of questions.
 5. At deadline, bot processes all received feedback
 6. Bot uses OpenAI to analyze sentiment, identify themes, and anonymize quotes
 7. Bot generates and posts report to the original channel
-8. Bot stores session data for historical analysis
+8. Bot clears session data from memory
 
 ### 3. Error Handling
+- **Approach**: Cancel the sentiment thread for the session and write back to the channel with error information
 - **Notification Levels**:
   - Critical errors: Notify in channel where bot was triggered
   - Minor issues: Log without user disruption
-  - Severe technical problems: Notify system administrators
 - **Specific Error Scenarios**:
-  - API rate limits: Implement exponential backoff
-  - Database connection issues: Retry with timeout
-  - User not found: Graceful error message
-  - OpenAI API unavailable: Fall back to basic analysis
+  - API rate limits: Cancel session and notify channel
+  - User not found: Cancel session and notify channel
+  - OpenAI API unavailable: Report raw data without AI analysis
 
 ### 4. Performance Considerations
-- **Scalability**:
-  - Handle multiple concurrent feedback sessions
+- **Concurrency**:
+  - Handle multiple concurrent feedback sessions (up to configured limit)
   - Support teams of various sizes (5-500+ members)
+  - Thread synchronization with minimal locking to prevent contention
+  - Worker threads for session management to prevent blocking main thread
+  - Efficient resource utilization through non-blocking timer implementation
 - **Latency**:
   - Modal response time < 1 second
   - Report generation < 30 seconds after deadline
 - **Resource Usage**:
-  - Memory and CPU requirements documented for Kubernetes deployment
+  - Memory usage controlled via session limits and cleanup
+  - Basic logging for monitoring
+  - Thread pool management to prevent resource exhaustion
 
 ## Installation & Documentation
 
@@ -154,7 +170,7 @@ The architecture should support future customization of questions.
 
 ### 2. Integration Testing
 - Test interaction between components
-- Verify database operations
+- Test thread safety and concurrency
 - Test API integrations with real credentials in test environment
 
 ### 3. End-to-End Testing
@@ -169,10 +185,9 @@ The architecture should support future customization of questions.
 ## Monitoring & Analytics
 
 ### 1. System Monitoring
-- Application health metrics
-- API response times
+- Basic logging for MVP
+- Future enhancement: OpenTelemetry integration
 - Error rates and types
-- Resource utilization
 
 ### 2. Usage Analytics
 - Number of feedback sessions
@@ -193,6 +208,7 @@ The architecture should support future customization of questions.
 - Integration with other platforms (MS Teams, etc.)
 - Export functionality for reports
 - API for external integrations
+- Enhanced monitoring with OpenTelemetry
 
 ## Development Timeline
 
