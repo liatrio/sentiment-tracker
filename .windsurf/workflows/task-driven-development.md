@@ -45,7 +45,7 @@ I've created issue #{{issueNumber}} to track this task.
 I'll create a local feature branch following the naming convention.
 ```
 mcp0_git_create_branch --repo_path="{{projectRoot}}" --branch_name="{{taskType}}/{{taskSlug}}-{{issueNumber}}" --base_branch="main"
-mcp0_git_checkout --repo_path="{{projectRoot}}" --branch_name="{{taskType}}/{{taskSlug}}-{{issueNumber}}"
+mcp0_git_checkout --repo_path="{{projectRoot}}" --branch_name="{{taskType}}/{{taskSlug}}-issue-{{issueNumber}}"
 
 I've created and checked out branch '{{taskType}}/{{taskSlug}}-{{issueNumber}}'.
 ```
