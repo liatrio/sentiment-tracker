@@ -1,0 +1,12 @@
+[flake8]
+# Base settings
+max-line-length = 88
+# E203: Whitespace before ':', conflicts with Black
+extend-ignore = E203
+# Plugins (if you add any, like flake8-bugbear, flake8-comprehensions)
+# select = B,C,E,F,W,T4,B9
+# ignore = E501 (handled by Black), W503 (conflicts with Black)
+
+# Per-file ignores (example)
+# per-file-ignores =
+#     __init__.py:F401
