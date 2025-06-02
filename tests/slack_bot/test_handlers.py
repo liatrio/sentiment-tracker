@@ -3,10 +3,7 @@ import unittest
 from unittest.mock import MagicMock
 
 from src.session_data import SessionData
-from src.slack_bot.handlers import (
-    handle_feedback_modal_submission,
-    handle_sentiment_selection,
-)
+from src.slack_bot.handlers import handle_feedback_modal_submission
 
 
 class TestHandlers(unittest.TestCase):
@@ -20,90 +17,6 @@ class TestHandlers(unittest.TestCase):
         self.user_id = "U123ABC"
         self.channel_id = "C123DEF"
 
-    # --- Tests for handle_sentiment_selection ---
-    def test_handle_sentiment_selection_success(self):
-        """Test successful handling of sentiment selection."""
-        mock_session = SessionData(
-            session_id=self.session_id, user_id=self.user_id, channel_id=self.channel_id
-        )
-        self.mock_session_store.get_session.return_value = mock_session
-
-        selected_sentiment = "positive"
-        body = {
-            "actions": [{"value": selected_sentiment}],
-            "view": {"private_metadata": self.session_id},
-            "user": {"id": self.user_id},
-            "channel": {"id": self.channel_id},
-        }
-
-        handle_sentiment_selection(
-            ack=self.mock_ack,
-            body=body,
-            client=self.mock_client,
-            logger=self.mock_logger,
-            session_store=self.mock_session_store,
-        )
-
-        self.mock_ack.assert_called_once()
-        self.mock_session_store.get_session.assert_called_once_with(self.session_id)
-        self.assertEqual(mock_session.feedback_sentiment, selected_sentiment)
-        self.mock_logger.info.assert_any_call(
-            f"Sentiment selection received: session_id='{self.session_id}', sentiment='{selected_sentiment}'"
-        )
-        self.mock_logger.info.assert_any_call(
-            f"Updated session '{self.session_id}' with sentiment: '{selected_sentiment}'"
-        )
-
-    def test_handle_sentiment_selection_session_not_found(self):
-        """Test handling of sentiment selection when session is not found."""
-        self.mock_session_store.get_session.return_value = None
-
-        selected_sentiment = "neutral"
-        body = {
-            "actions": [{"value": selected_sentiment}],
-            "view": {"private_metadata": self.session_id},
-            "user": {"id": self.user_id},
-        }
-
-        handle_sentiment_selection(
-            ack=self.mock_ack,
-            body=body,
-            client=self.mock_client,
-            logger=self.mock_logger,
-            session_store=self.mock_session_store,
-        )
-
-        self.mock_ack.assert_called_once()
-        self.mock_session_store.get_session.assert_called_once_with(self.session_id)
-        self.mock_logger.warning.assert_called_once_with(
-            f"Session ID '{self.session_id}' was absent from the session store."
-        )
-
-    def test_handle_sentiment_selection_exception_handling(self):
-        """Test exception handling during sentiment selection."""
-        self.mock_session_store.get_session.side_effect = Exception("Test error")
-
-        selected_sentiment = "negative"
-        body = {
-            "actions": [{"value": selected_sentiment}],
-            "view": {"private_metadata": self.session_id},
-            "user": {"id": self.user_id},
-        }
-
-        handle_sentiment_selection(
-            ack=self.mock_ack,
-            body=body,
-            client=self.mock_client,
-            logger=self.mock_logger,
-            session_store=self.mock_session_store,
-        )
-
-        self.mock_ack.assert_called_once()
-        self.mock_logger.error.assert_called_once_with(
-            f"Error processing sentiment selection for session '{self.session_id}': Test error",
-            exc_info=True,
-        )
-
     # --- Tests for handle_feedback_modal_submission ---
     def test_handle_feedback_modal_submission_success(self):
         """Test successful handling of feedback modal submission."""
@@ -115,10 +28,16 @@ class TestHandlers(unittest.TestCase):
         feedback_well_text = "Everything was great!"
         feedback_improve_text = "Maybe add more unicorns."
 
+        selected_sentiment_value = "positive"
         view_data = {
             "private_metadata": self.session_id,
             "state": {
                 "values": {
+                    "sentiment_input_block": {
+                        "sentiment_dropdown_action": {
+                            "selected_option": {"value": selected_sentiment_value}
+                        }
+                    },
                     "feedback_question_well_block": {
                         "feedback_question_well_input": {"value": feedback_well_text}
                     },
@@ -143,15 +62,16 @@ class TestHandlers(unittest.TestCase):
 
         self.mock_ack.assert_called_once_with()
         self.mock_session_store.get_session.assert_called_once_with(self.session_id)
+        self.assertEqual(mock_session.feedback_sentiment, selected_sentiment_value)
         self.assertEqual(mock_session.feedback_well, feedback_well_text)
         self.assertEqual(mock_session.feedback_improve, feedback_improve_text)
         self.mock_logger.info.assert_any_call(
             f"Feedback modal submission received for session_id='{self.session_id}'. "
-            f"Well: '{feedback_well_text}', Improve: '{feedback_improve_text}'"
+            f"Sentiment: '{selected_sentiment_value}', Well: '{feedback_well_text}', Improve: '{feedback_improve_text}'"
         )
         self.mock_logger.info.assert_any_call(
             f"Updated session '{self.session_id}' with feedback: "
-            f"Well='{feedback_well_text}', Improve='{feedback_improve_text}'"
+            f"Sentiment: '{selected_sentiment_value}', Well='{feedback_well_text}', Improve='{feedback_improve_text}'"
         )
 
     def test_handle_feedback_modal_submission_session_not_found(self):
@@ -162,6 +82,11 @@ class TestHandlers(unittest.TestCase):
             "private_metadata": self.session_id,
             "state": {
                 "values": {
+                    "sentiment_input_block": {
+                        "sentiment_dropdown_action": {
+                            "selected_option": {"value": "neutral"}  # Example value
+                        }
+                    },
                     "feedback_question_well_block": {
                         "feedback_question_well_input": {"value": "Well"}
                     },
@@ -196,6 +121,11 @@ class TestHandlers(unittest.TestCase):
             "private_metadata": self.session_id,
             "state": {
                 "values": {
+                    "sentiment_input_block": {
+                        "sentiment_dropdown_action": {
+                            "selected_option": {"value": "negative"}  # Example value
+                        }
+                    },
                     "feedback_question_well_block": {
                         "feedback_question_well_input": {"value": "Test well"}
                     },

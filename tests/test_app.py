@@ -191,7 +191,17 @@ def test_handle_test_feedback_command_success(
     mock_ack.assert_called_once()
     mock_uuid4.assert_called_once()
 
-    # Check that session_store.add_session was called with a SessionData instance
+    # Assert open_feedback_modal was called after ack and uuid generation
+    mock_open_feedback_modal.assert_called_once_with(
+        client=mock_client,
+        trigger_id=test_trigger_id,
+        session_id=test_session_id,
+    )
+    mock_logger.info.assert_any_call(
+        f"Attempted to open feedback modal with session_id '{test_session_id}' for user '{test_user_id}'."
+    )
+
+    # Check that session_store.add_session was called with a SessionData instance after modal open
     assert mock_session_store.add_session.call_count == 1
     added_session_arg = mock_session_store.add_session.call_args[0][0]
     assert isinstance(added_session_arg, SessionData)
@@ -200,15 +210,7 @@ def test_handle_test_feedback_command_success(
     assert added_session_arg.channel_id == test_channel_id
 
     mock_logger.info.assert_any_call(
-        f"Created new session '{test_session_id}' for /test-feedback command from user '{test_user_id}'."
-    )
-    mock_open_feedback_modal.assert_called_once_with(
-        client=mock_client,
-        trigger_id=test_trigger_id,
-        session_id=test_session_id,
-    )
-    mock_logger.info.assert_any_call(
-        f"Opened feedback modal for session '{test_session_id}' triggered by user '{test_user_id}'."
+        f"Created and stored session '{test_session_id}' for user '{test_user_id}'."
     )
     mock_respond.assert_not_called()
 
@@ -261,4 +263,8 @@ def test_handle_test_feedback_command_exception(
     mock_respond.assert_called_once_with(
         text="Sorry, something went wrong while trying to open the feedback form. Please try again."
     )
-    mock_open_feedback_modal.assert_not_called()  # Should not be called if session creation failed
+    mock_open_feedback_modal.assert_called_once_with(
+        client=mock_client,
+        trigger_id=test_trigger_id,
+        session_id=str(mock_uuid4.return_value),
+    )  # Should be called before session creation fails

@@ -9,10 +9,7 @@ from slack_bolt.adapter.socket_mode import SocketModeHandler
 
 from src.session_data import SessionData  # For creating new sessions
 from src.session_store import ThreadSafeSessionStore
-from src.slack_bot.handlers import (
-    handle_feedback_modal_submission,
-    handle_sentiment_selection,
-)
+from src.slack_bot.handlers import handle_feedback_modal_submission
 from src.slack_bot.views import open_feedback_modal  # For opening the modal
 
 # Load environment variables from .env file
@@ -92,21 +89,21 @@ def handle_test_feedback_command(ack, command, client, logger, respond):
         )  # Might be None if used in DMs with the bot
         trigger_id = command["trigger_id"]
 
-        # Create a new session
+        # Generate a session ID first as it's needed for the modal's private_metadata
         session_id = str(uuid.uuid4())
+
+        # Open the modal as soon as possible with the trigger_id
+        open_feedback_modal(client=client, trigger_id=trigger_id, session_id=session_id)
+        logger.info(
+            f"Attempted to open feedback modal with session_id '{session_id}' for user '{user_id}'."
+        )
+
+        # Now, create and store the session data
         new_session = SessionData(
             session_id=session_id, user_id=user_id, channel_id=channel_id
         )
         session_store.add_session(new_session)
-        logger.info(
-            f"Created new session '{session_id}' for /test-feedback command from user '{user_id}'."
-        )
-
-        # Open the modal
-        open_feedback_modal(client=client, trigger_id=trigger_id, session_id=session_id)
-        logger.info(
-            f"Opened feedback modal for session '{session_id}' triggered by user '{user_id}'."
-        )
+        logger.info(f"Created and stored session '{session_id}' for user '{user_id}'.")
 
     except Exception as e:
         logger.error(f"Error handling /test-feedback command: {e}", exc_info=True)
@@ -127,16 +124,6 @@ def handle_app_mention(event, say):
 def custom_error_handler(error, body, logger):
     logger.exception(f"Error handling request: {error}")
     logger.debug(f"Request body: {body}")
-
-
-# Register action handlers for modal sentiment buttons
-@app.action("sentiment_positive_button")
-@app.action("sentiment_neutral_button")
-@app.action("sentiment_negative_button")
-def sentiment_button_handler_wrapper(ack, body, client, logger):
-    handle_sentiment_selection(
-        ack=ack, body=body, client=client, logger=logger, session_store=session_store
-    )
 
 
 # Register view submission handler for the feedback modal

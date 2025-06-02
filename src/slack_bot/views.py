@@ -38,40 +38,49 @@ def get_feedback_modal_view(session_id: str) -> Dict[str, Any]:
                 },
             },
             {
-                "type": "actions",
-                "block_id": "sentiment_selection_block",
-                "elements": [
-                    {
-                        "type": "button",
-                        "text": {
-                            "type": "plain_text",
-                            "text": "😊 Positive",
-                            "emoji": True,
-                        },
-                        "value": "positive",
-                        "action_id": "sentiment_positive_button",
+                "type": "input",
+                "block_id": "sentiment_input_block",
+                "label": {
+                    "type": "plain_text",
+                    "text": "Overall Sentiment",
+                    "emoji": True,
+                },
+                "element": {
+                    "type": "static_select",
+                    "action_id": "sentiment_dropdown_action",
+                    "placeholder": {
+                        "type": "plain_text",
+                        "text": "Select a sentiment",
+                        "emoji": True,
                     },
-                    {
-                        "type": "button",
-                        "text": {
-                            "type": "plain_text",
-                            "text": "😐 Neutral",
-                            "emoji": True,
+                    "options": [
+                        {
+                            "text": {
+                                "type": "plain_text",
+                                "text": "😊 Positive",
+                                "emoji": True,
+                            },
+                            "value": "positive",
                         },
-                        "value": "neutral",
-                        "action_id": "sentiment_neutral_button",
-                    },
-                    {
-                        "type": "button",
-                        "text": {
-                            "type": "plain_text",
-                            "text": "😞 Negative",
-                            "emoji": True,
+                        {
+                            "text": {
+                                "type": "plain_text",
+                                "text": "😐 Neutral",
+                                "emoji": True,
+                            },
+                            "value": "neutral",
                         },
-                        "value": "negative",
-                        "action_id": "sentiment_negative_button",
-                    },
-                ],
+                        {
+                            "text": {
+                                "type": "plain_text",
+                                "text": "😞 Negative",
+                                "emoji": True,
+                            },
+                            "value": "negative",
+                        },
+                    ],
+                },
+                "optional": False,  # Make sentiment selection mandatory
             },
             {
                 "type": "input",
