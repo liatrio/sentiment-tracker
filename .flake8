@@ -5,7 +5,8 @@ max-line-length = 88
 extend-ignore = E203
 # Plugins (if you add any, like flake8-bugbear, flake8-comprehensions)
 # select = B,C,E,F,W,T4,B9
-# ignore = E501 (handled by Black), W503 (conflicts with Black)
+# E501 handled by Black, W503 conflicts with Black
+ignore = E501, W503
 
 # Per-file ignores (example)
 # per-file-ignores =

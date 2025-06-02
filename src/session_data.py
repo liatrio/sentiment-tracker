@@ -1,9 +1,13 @@
 import datetime
 from typing import List, Optional
 
+
 class SessionData:
     """Represents the data associated with a single feedback session."""
-    def __init__(self, session_id: str, user_id: str, channel_id: str, initial_feedback: str = ""):
+
+    def __init__(
+        self, session_id: str, user_id: str, channel_id: str, initial_feedback: str = ""
+    ):
         """
         Initializes a new session.
 
@@ -17,10 +21,15 @@ class SessionData:
         self.user_id: str = user_id
         self.channel_id: str = channel_id
         self.feedback_items: List[str] = [initial_feedback] if initial_feedback else []
-        self.created_at: datetime.datetime = datetime.datetime.now(datetime.timezone.utc)
+        self.created_at: datetime.datetime = datetime.datetime.now(
+            datetime.timezone.utc
+        )
         self.last_accessed_at: datetime.datetime = self.created_at
         self.is_complete: bool = False
         self.anonymized_summary: Optional[str] = None
+        self.feedback_sentiment: Optional[str] = None
+        self.feedback_well: Optional[str] = None
+        self.feedback_improve: Optional[str] = None
 
     def add_feedback(self, feedback_item: str) -> None:
         """Adds a new feedback item to the session and updates the last access time."""
@@ -34,8 +43,31 @@ class SessionData:
         self.last_accessed_at = datetime.datetime.now(datetime.timezone.utc)
 
     def __repr__(self) -> str:
-        return (
-            f"SessionData(session_id='{self.session_id}', user_id='{self.user_id}', "
-            f"created_at='{self.created_at.isoformat()}', feedback_count={len(self.feedback_items)}, "
-            f"is_complete={self.is_complete})"
-        )
+        parts = [
+            f"session_id='{self.session_id}'",
+            f"user_id='{self.user_id}'",
+            f"created_at='{self.created_at.isoformat()}'",
+            f"feedback_count={len(self.feedback_items)}",
+            f"is_complete={self.is_complete}",
+        ]
+        if self.feedback_sentiment:
+            parts.append(f"feedback_sentiment='{self.feedback_sentiment}'")
+        if self.feedback_well:
+            parts.append(
+                f"feedback_well='{self.feedback_well[:20]}...'"
+                if len(self.feedback_well) > 20
+                else f"feedback_well='{self.feedback_well}'"
+            )
+        if self.feedback_improve:
+            parts.append(
+                f"feedback_improve='{self.feedback_improve[:20]}...'"
+                if len(self.feedback_improve) > 20
+                else f"feedback_improve='{self.feedback_improve}'"
+            )
+        if self.anonymized_summary:
+            parts.append(
+                f"anonymized_summary='{self.anonymized_summary[:20]}...'"
+                if len(self.anonymized_summary) > 20
+                else f"anonymized_summary='{self.anonymized_summary}'"
+            )
+        return f"SessionData({', '.join(parts)})"

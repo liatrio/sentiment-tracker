@@ -135,7 +135,7 @@ tasks:
     deps: [install-dev]
     cmds:
       - echo "Running mypy..."
-      - "{{.PYTHON_CMD}} -m mypy src/" # Often good to start with src, then add tests
+      - "{{.PYTHON_CMD}} -m mypy -p src" # Check the 'src' package
     sources:
       - src/**/*.py
       # - tests/**/*.py # Can add later if tests have type hints

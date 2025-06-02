@@ -6,6 +6,12 @@ from dotenv import load_dotenv
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
+from src.session_store import ThreadSafeSessionStore
+from src.slack_bot.handlers import (
+    handle_feedback_modal_submission,
+    handle_sentiment_selection,
+)
+
 # Load environment variables from .env file
 load_dotenv()
 
@@ -22,6 +28,9 @@ app = App(
     # Process all messages, not just those that mention the bot
     process_before_response=True,
 )
+
+# Initialize session store
+session_store = ThreadSafeSessionStore()
 
 
 # Log all incoming messages to help with debugging
@@ -81,6 +90,29 @@ def handle_app_mention(event, say):
 def custom_error_handler(error, body, logger):
     logger.exception(f"Error handling request: {error}")
     logger.debug(f"Request body: {body}")
+
+
+# Register action handlers for modal sentiment buttons
+@app.action("sentiment_positive_button")
+@app.action("sentiment_neutral_button")
+@app.action("sentiment_negative_button")
+def sentiment_button_handler_wrapper(ack, body, client, logger):
+    handle_sentiment_selection(
+        ack=ack, body=body, client=client, logger=logger, session_store=session_store
+    )
+
+
+# Register view submission handler for the feedback modal
+@app.view("feedback_modal_callback")
+def feedback_modal_submission_handler_wrapper(ack, body, client, view, logger):
+    handle_feedback_modal_submission(
+        ack=ack,
+        body=body,
+        client=client,
+        view=view,
+        logger=logger,
+        session_store=session_store,
+    )
 
 
 # Main entry point for the app
