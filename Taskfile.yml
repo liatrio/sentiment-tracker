@@ -1,0 +1,178 @@
+# Taskfile.yml
+version: '3'
+
+vars:
+  PROJECT_NAME: sentiment-tracker
+  PYTHON_VERSION: "3.9" # Updated to match Dockerfile
+  VENV_DIR: .venv
+  PIP_CMD: "{{.VENV_DIR}}/bin/pip"
+  PYTHON_CMD: "{{.VENV_DIR}}/bin/python"
+
+tasks:
+  default:
+    cmds:
+      - task --list-all
+    silent: true
+
+  clean:
+    desc: "Remove virtual environment and __pycache__ directories"
+    cmds:
+      - rm -rf {{.VENV_DIR}}
+      - find . -type d -name "__pycache__" -exec rm -rf {} +
+      - find . -type f -name "*.pyc" -delete
+    silent: true
+
+  venv:
+    desc: "Create a Python virtual environment"
+    cmds:
+      - echo "Creating virtual environment using Python {{.PYTHON_VERSION}}..."
+      - "{{if eq OS \"windows\"}}python -m venv {{.VENV_DIR}}{{else}}python3 -m venv {{.VENV_DIR}}{{end}}"
+    sources: # Re-run if Taskfile.yml changes (e.g., PYTHON_VERSION)
+      - Taskfile.yml
+    generates: # Marks the task as complete if this file exists
+      - "{{.VENV_DIR}}/pyvenv.cfg" # More reliable than just the directory
+    status: # Check if venv exists
+      - test -d {{.VENV_DIR}} && {{.PYTHON_CMD}} --version | grep -q "{{.PYTHON_VERSION}}"
+
+  install:
+    desc: "Install project dependencies (main and development)"
+    deps: [venv]
+    cmds:
+      - echo "Installing main dependencies from requirements.txt..."
+      - "{{.PIP_CMD}} install -r requirements.txt"
+      - echo "Installing development dependencies from requirements-dev.txt..."
+      - "{{.PIP_CMD}} install -r requirements-dev.txt"
+    sources:
+      - requirements.txt
+      - requirements-dev.txt # Add this source
+    # This task will now re-run if either requirements file changes.
+
+  install-dev:
+    desc: "Install development-specific dependencies"
+    deps: [venv]
+    cmds:
+      - echo "Installing development dependencies from requirements-dev.txt..."
+      - "{{.PIP_CMD}} install -r requirements-dev.txt"
+    sources:
+      - requirements-dev.txt
+
+  init:
+    desc: "Initialize the development environment (create venv, install deps)"
+    cmds:
+      - task: venv
+      - task: install
+    silent: true
+
+  test:
+    desc: "Run tests with pytest and generate coverage report"
+    deps: [install-dev] # Ensure dev dependencies (pytest, pytest-cov) are installed
+    cmds:
+      - echo "Running tests..."
+      - "{{.VENV_DIR}}/bin/pytest tests/ --cov=src --cov-report=term-missing"
+    sources: # Re-run tests if source code or test files change
+      - src/**/*.py
+      - tests/**/*.py
+    # You can also add generates for coverage.xml or htmlcov/ if needed
+
+  flake8:
+    desc: "Run flake8 linter"
+    deps: [install-dev]
+    cmds:
+      - echo "Running flake8..."
+      - "{{.PYTHON_CMD}} -m flake8 src/ tests/"
+    sources:
+      - src/**/*.py
+      - tests/**/*.py
+      - .flake8
+      - pyproject.toml
+
+  black-check:
+    desc: "Check code formatting with Black (no changes)"
+    deps: [install-dev]
+    cmds:
+      - echo "Checking formatting with Black..."
+      - "{{.PYTHON_CMD}} -m black --check --diff src/ tests/"
+    sources:
+      - src/**/*.py
+      - tests/**/*.py
+      - pyproject.toml
+
+  black-format:
+    desc: "Format code with Black"
+    deps: [install-dev]
+    cmds:
+      - echo "Formatting code with Black..."
+      - "{{.PYTHON_CMD}} -m black src/ tests/"
+    sources:
+      - src/**/*.py
+      - tests/**/*.py
+      - pyproject.toml
+
+  isort-check:
+    desc: "Check import sorting with isort (no changes)"
+    deps: [install-dev]
+    cmds:
+      - echo "Checking import sorting with isort..."
+      - "{{.PYTHON_CMD}} -m isort --check-only --diff src/ tests/"
+    sources:
+      - src/**/*.py
+      - tests/**/*.py
+      - pyproject.toml
+
+  isort-format:
+    desc: "Sort imports with isort"
+    deps: [install-dev]
+    cmds:
+      - echo "Sorting imports with isort..."
+      - "{{.PYTHON_CMD}} -m isort src/ tests/"
+    sources:
+      - src/**/*.py
+      - tests/**/*.py
+      - pyproject.toml
+
+  mypy:
+    desc: "Run mypy static type checker"
+    deps: [install-dev]
+    cmds:
+      - echo "Running mypy..."
+      - "{{.PYTHON_CMD}} -m mypy src/" # Often good to start with src, then add tests
+    sources:
+      - src/**/*.py
+      # - tests/**/*.py # Can add later if tests have type hints
+      - pyproject.toml
+
+  lint:
+    desc: "Run all linters and checkers (flake8, black-check, isort-check, mypy)"
+    cmds:
+      - task: flake8
+      - task: black-check
+      - task: isort-check
+      - task: mypy
+    silent: true
+
+  format:
+    desc: "Format code with Black and isort"
+    cmds:
+      - task: black-format
+      - task: isort-format
+    silent: true
+
+  pre-commit-install:
+    desc: "Install pre-commit hooks to .git/hooks"
+    deps: [install-dev] # Ensures pre-commit is installed
+    cmds:
+      - echo "Installing pre-commit hooks..."
+      - "{{.VENV_DIR}}/bin/pre-commit install"
+    # You might want to add sources/generates if pre-commit creates a specific file
+    # to mark completion, e.g. .git/hooks/pre-commit
+
+  pre-commit-run:
+    desc: "Run pre-commit hooks on all files"
+    deps: [install-dev]
+    cmds:
+      - echo "Running pre-commit hooks on all files..."
+      - "{{.VENV_DIR}}/bin/pre-commit run --all-files"
+    sources: # Re-run if config or python files change
+      - .pre-commit-config.yaml
+      - src/**/*.py
+      - tests/**/*.py

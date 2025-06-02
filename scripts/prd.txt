@@ -7,7 +7,7 @@ The Sentiment Tracker is a Slack bot designed to collect, analyze, and report te
 
 ### 1. Feedback Collection
 - **Trigger Mechanism**: Any team member can initiate feedback collection via Slack command
-- **Command Syntax**: 
+- **Command Syntax**:
   - `@sentiment-bot gather feedback for @team-group-name` (uses default time window)
   - `@sentiment-bot gather feedback for @team-group-name in X minutes` (custom time window)
 - **Time Window**:
@@ -67,7 +67,7 @@ The architecture should support future customization of questions.
   - Main application thread handles incoming requests
   - Thread-safe callbacks update the shared memory store when responses arrive
   - Non-blocking timer implementation using scheduled tasks/callbacks
-- **Persistence**: 
+- **Persistence**:
   - No persistence across application restarts
   - Users must restart feedback collection if application restarts
   - Reports are stored in Slack message history only

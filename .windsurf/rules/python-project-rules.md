@@ -1,0 +1,62 @@
+---
+trigger: glob
+globs: **/*.py
+---
+
+- **General Python Best Practices**
+  - **PEP 8 Compliance**: Adhere to PEP 8 style guidelines for code readability and consistency.
+    - Use an auto-formatter like Black or Yapf if desired.
+  - **Type Hinting**: Utilize Python's type hinting for all function signatures and critical variables to improve code clarity and enable static analysis.
+    - Example: `def greet(name: str) -> str:`
+  - **Docstrings**: Write comprehensive docstrings for all modules, classes, functions, and methods, following a standard format (e.g., Google, NumPy, or reStructuredText).
+    - Explain what the component does, its arguments, and what it returns.
+  - **Virtual Environments**: Always use virtual environments (e.g., `venv`, `conda`) to manage project dependencies and isolate project environments.
+    - Include the virtual environment directory (e.g., `venv/`, `.venv/`) in [.gitignore](cci:7://file:///Users/jburns/git/sentiment-tracker/.gitignore:0:0-0:0).
+  - **Dependency Management**: Maintain a [requirements.txt](cci:7://file:///Users/jburns/git/sentiment-tracker/requirements.txt:0:0-0:0) file for project dependencies.
+    - Use `pip freeze > requirements.txt` to generate it.
+    - Keep dependencies updated and specify versions to ensure reproducible builds.
+  - **Logging**: Implement structured logging for application events, errors, and debugging information.
+    - Use Python's built-in `logging` module.
+    - Configure log levels and output formats as needed (refer to [spec.md](cci:7://file:///Users/jburns/git/sentiment-tracker/spec.md:0:0-0:0) for MVP logging and future OpenTelemetry integration).
+  - **Error Handling**: Implement robust error handling using try-except blocks.
+    - Catch specific exceptions rather than generic `Exception`.
+    - Provide clear error messages and log errors appropriately (refer to [spec.md](cci:7://file:///Users/jburns/git/sentiment-tracker/spec.md:0:0-0:0) error handling section).
+  - **Modularity**: Write modular and reusable code. Break down complex logic into smaller functions and classes.
+
+- **Project-Specific Rules (Sentiment Tracker Bot - based on spec.md)**
+  - **Framework**: Utilize `Bolt for Python` for Slack bot development.
+    - Follow Bolt framework conventions and best practices.
+  - **Containerization**: Develop and deploy the application using Docker.
+    - Maintain a [Dockerfile](cci:7://file:///Users/jburns/git/sentiment-tracker/Dockerfile:0:0-0:0) for building the application image.
+    - Use [docker-compose.yml](cci:7://file:///Users/jburns/git/sentiment-tracker/docker-compose.yml:0:0-0:0) for local development and testing environments if applicable.
+    - Ensure the containerized setup aligns with deployment in the in-house Kubernetes cluster.
+  - **Configuration Management**: Manage all application settings and credentials via environment variables.
+    - Do NOT hardcode sensitive information or configuration values.
+    - Provide an [.env.example](cci:7://file:///Users/jburns/git/sentiment-tracker/.env.example:0:0-0:0) file to document required environment variables.
+    - Ensure configurability for settings like concurrent session limits and session cleanup times.
+  - **In-Memory Data Management**:
+    - Implement thread-safe in-memory data structures (e.g., dictionaries protected by locks) for session management as specified.
+    - Be mindful of concurrency and potential race conditions.
+    - Adhere to the specified session management logic (max concurrent sessions, automatic cleanup).
+  - **AI Integration (OpenAI)**:
+    - Handle API integration with OpenAI carefully, including rate limiting and error handling.
+    - Implement fallback mechanisms if the OpenAI API is unavailable (e.g., report raw data).
+    - Follow best practices for prompt engineering to ensure consistent and reliable AI-driven analysis and anonymization.
+  - **Security & Privacy**:
+    - Prioritize data privacy and anonymization as outlined in [spec.md](cci:7://file:///Users/jburns/git/sentiment-tracker/spec.md:0:0-0:0).
+    - Ensure AI-based rewriting of quotes effectively masks identity.
+    - Clear all data from memory after report generation.
+  - **Testing**:
+    - **Unit Tests**: Write unit tests for all core functions, mocking external services (Slack API, OpenAI). Aim for high code coverage (e.g., >80% as per [spec.md](cci:7://file:///Users/jburns/git/sentiment-tracker/spec.md:0:0-0:0)).
+    - **Integration Tests**: Test interactions between components, thread safety, and API integrations.
+    - **End-to-End Tests**: Conduct complete workflow testing, including performance and security testing.
+  - **Slack Integration**:
+    - Ensure correct Slack permissions are requested and handled (`chat:write`, `users:read`, etc.).
+    - Implement interactive components (buttons, modals) according to Slack guidelines and project requirements.
+  - **Workflow Adherence**: Code should follow the defined bot workflow (trigger, DM, collect, process, report, clear).
+
+- **Code Structure and Organization**
+  - Organize code into logical modules and packages.
+  - Separate concerns (e.g., Slack interaction, AI processing, data management).
+  - Ensure the main application thread handles incoming requests efficiently, delegating tasks to worker threads for feedback collection sessions.
+  - **Minimal `__main__` Block**: Keep the `if __name__ == \"__main__\":` block minimal. Its primary responsibility should be to orchestrate the application's startup by calling a main function or initializing key components. Complex logic, configuration loading, or extensive setup should be delegated to dedicated functions or modules to improve testability and readability.
