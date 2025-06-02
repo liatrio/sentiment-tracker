@@ -174,7 +174,8 @@ The architecture should support future customization of questions.
 - Test API integrations with real credentials in test environment
 
 ### 3. End-to-End Testing
-- Complete workflow testing
+- Complete workflow testing.
+  - **Single-User Testing**: For development and testing purposes, it must be possible for a single user to initiate a feedback session, receive the feedback modal (as if they were part of the target group), submit feedback, and receive/view the anonymized report. This allows for easier debugging and verification of the entire feedback lifecycle.
 - Performance testing under load
 - Security testing
 

@@ -1,10 +1,16 @@
 import logging
 import os
 import re
+import uuid  # For generating unique session IDs
 
 from dotenv import load_dotenv
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
+
+from src.session_data import SessionData  # For creating new sessions
+from src.session_store import ThreadSafeSessionStore
+from src.slack_bot.handlers import handle_feedback_modal_submission
+from src.slack_bot.views import open_feedback_modal  # For opening the modal
 
 # Load environment variables from .env file
 load_dotenv()
@@ -22,6 +28,9 @@ app = App(
     # Process all messages, not just those that mention the bot
     process_before_response=True,
 )
+
+# Initialize session store
+session_store = ThreadSafeSessionStore()
 
 
 # Log all incoming messages to help with debugging
@@ -69,6 +78,40 @@ def command_ping(ack, respond):
     respond("Pong! :table_tennis_paddle_and_ball:")
 
 
+@app.command("/test-feedback")
+def handle_test_feedback_command(ack, command, client, logger, respond):
+    """Handles the /test-feedback slash command to open the feedback modal."""
+    ack()
+    try:
+        user_id = command["user_id"]
+        channel_id = command.get(
+            "channel_id"
+        )  # Might be None if used in DMs with the bot
+        trigger_id = command["trigger_id"]
+
+        # Generate a session ID first as it's needed for the modal's private_metadata
+        session_id = str(uuid.uuid4())
+
+        # Open the modal as soon as possible with the trigger_id
+        open_feedback_modal(client=client, trigger_id=trigger_id, session_id=session_id)
+        logger.info(
+            f"Attempted to open feedback modal with session_id '{session_id}' for user '{user_id}'."
+        )
+
+        # Now, create and store the session data
+        new_session = SessionData(
+            session_id=session_id, user_id=user_id, channel_id=channel_id
+        )
+        session_store.add_session(new_session)
+        logger.info(f"Created and stored session '{session_id}' for user '{user_id}'.")
+
+    except Exception as e:
+        logger.error(f"Error handling /test-feedback command: {e}", exc_info=True)
+        respond(
+            text="Sorry, something went wrong while trying to open the feedback form. Please try again."
+        )
+
+
 # Example app mention handler
 @app.event("app_mention")
 def handle_app_mention(event, say):
@@ -81,6 +124,19 @@ def handle_app_mention(event, say):
 def custom_error_handler(error, body, logger):
     logger.exception(f"Error handling request: {error}")
     logger.debug(f"Request body: {body}")
+
+
+# Register view submission handler for the feedback modal
+@app.view("feedback_modal_callback")
+def feedback_modal_submission_handler_wrapper(ack, body, client, view, logger):
+    handle_feedback_modal_submission(
+        ack=ack,
+        body=body,
+        client=client,
+        view=view,
+        logger=logger,
+        session_store=session_store,
+    )
 
 
 # Main entry point for the app

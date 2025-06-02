@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 
 # For now, let's assume we can test the decorated functions somewhat directly
 # by calling them with mocked arguments.
+from src.app import handle_test_feedback_command  # Added for testing
 from src.app import (
     command_ping,
     custom_error_handler,
@@ -11,6 +12,7 @@ from src.app import (
     message_hello,
     message_help,
 )
+from src.session_data import SessionData  # Added for type assertion
 
 # Functions to test from src.app
 # We need to be careful with how the app instance and its decorators are handled.
@@ -146,3 +148,123 @@ def test_custom_error_handler(mock_app_logger):
 
 
 # We can add more meaningful tests later for other handlers.
+
+
+@patch("src.app.uuid.uuid4")
+@patch("src.app.open_feedback_modal")
+@patch("src.app.session_store")
+@patch("src.app.logger")
+def test_handle_test_feedback_command_success(
+    mock_logger,
+    mock_session_store,
+    mock_open_feedback_modal,
+    mock_uuid4,
+):
+    """Test successful execution of the /test-feedback command."""
+    # Arrange
+    mock_ack = MagicMock()
+    mock_client = MagicMock()
+    mock_respond = MagicMock()
+    test_user_id = "U_TEST_USER"
+    test_channel_id = "C_TEST_CHANNEL"
+    test_trigger_id = "T_TEST_TRIGGER"
+    test_session_id = "fake-uuid-1234"
+
+    mock_uuid4.return_value = test_session_id
+
+    mock_command_payload = {
+        "user_id": test_user_id,
+        "channel_id": test_channel_id,
+        "trigger_id": test_trigger_id,
+    }
+
+    # Act
+    handle_test_feedback_command(
+        ack=mock_ack,
+        command=mock_command_payload,
+        client=mock_client,
+        logger=mock_logger,
+        respond=mock_respond,
+    )
+
+    # Assert
+    mock_ack.assert_called_once()
+    mock_uuid4.assert_called_once()
+
+    # Assert open_feedback_modal was called after ack and uuid generation
+    mock_open_feedback_modal.assert_called_once_with(
+        client=mock_client,
+        trigger_id=test_trigger_id,
+        session_id=test_session_id,
+    )
+    mock_logger.info.assert_any_call(
+        f"Attempted to open feedback modal with session_id '{test_session_id}' for user '{test_user_id}'."
+    )
+
+    # Check that session_store.add_session was called with a SessionData instance after modal open
+    assert mock_session_store.add_session.call_count == 1
+    added_session_arg = mock_session_store.add_session.call_args[0][0]
+    assert isinstance(added_session_arg, SessionData)
+    assert added_session_arg.session_id == test_session_id
+    assert added_session_arg.user_id == test_user_id
+    assert added_session_arg.channel_id == test_channel_id
+
+    mock_logger.info.assert_any_call(
+        f"Created and stored session '{test_session_id}' for user '{test_user_id}'."
+    )
+    mock_respond.assert_not_called()
+
+
+@patch(
+    "src.app.uuid.uuid4"
+)  # Still need to mock uuid even if it's not directly used before exception
+@patch("src.app.open_feedback_modal")
+@patch("src.app.session_store")
+@patch("src.app.logger")
+def test_handle_test_feedback_command_exception(
+    mock_logger,
+    mock_session_store,
+    mock_open_feedback_modal,
+    mock_uuid4,  # Keep mock_uuid4 in signature even if not used before exception
+):
+    """Test error handling in the /test-feedback command."""
+    # Arrange
+    mock_ack = MagicMock()
+    mock_client = MagicMock()
+    mock_respond = MagicMock()
+    test_user_id = "U_TEST_USER_EXC"
+    test_trigger_id = "T_TEST_TRIGGER_EXC"
+
+    mock_command_payload = {
+        "user_id": test_user_id,
+        "trigger_id": test_trigger_id,
+        # channel_id can be optional
+    }
+
+    # Configure a mock to raise an exception
+    test_exception = Exception("Something broke")
+    mock_session_store.add_session.side_effect = test_exception
+    # or mock_open_feedback_modal.side_effect = test_exception, depending on what you want to test
+
+    # Act
+    handle_test_feedback_command(
+        ack=mock_ack,
+        command=mock_command_payload,
+        client=mock_client,
+        logger=mock_logger,
+        respond=mock_respond,
+    )
+
+    # Assert
+    mock_ack.assert_called_once()
+    mock_logger.error.assert_called_once_with(
+        f"Error handling /test-feedback command: {test_exception}", exc_info=True
+    )
+    mock_respond.assert_called_once_with(
+        text="Sorry, something went wrong while trying to open the feedback form. Please try again."
+    )
+    mock_open_feedback_modal.assert_called_once_with(
+        client=mock_client,
+        trigger_id=test_trigger_id,
+        session_id=str(mock_uuid4.return_value),
+    )  # Should be called before session creation fails
