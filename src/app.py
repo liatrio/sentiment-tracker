@@ -84,7 +84,7 @@ def custom_error_handler(error, body, logger):
 
 
 # Main entry point for the app
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     logger.info("Starting the Slack bot app...")
     try:
         # Start the app using Socket Mode
