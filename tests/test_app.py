@@ -206,7 +206,6 @@ def test_handle_test_feedback_command_success(
         client=mock_client,
         trigger_id=test_trigger_id,
         session_id=test_session_id,
-        logger=mock_logger,
     )
     mock_logger.info.assert_any_call(
         f"Opened feedback modal for session '{test_session_id}' triggered by user '{test_user_id}'."

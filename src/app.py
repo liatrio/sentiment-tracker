@@ -103,9 +103,7 @@ def handle_test_feedback_command(ack, command, client, logger, respond):
         )
 
         # Open the modal
-        open_feedback_modal(
-            client=client, trigger_id=trigger_id, session_id=session_id, logger=logger
-        )
+        open_feedback_modal(client=client, trigger_id=trigger_id, session_id=session_id)
         logger.info(
             f"Opened feedback modal for session '{session_id}' triggered by user '{user_id}'."
         )
