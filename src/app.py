@@ -1,16 +1,19 @@
 import logging
 import os
 import re
+import uuid  # For generating unique session IDs
 
 from dotenv import load_dotenv
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
+from src.session_data import SessionData  # For creating new sessions
 from src.session_store import ThreadSafeSessionStore
 from src.slack_bot.handlers import (
     handle_feedback_modal_submission,
     handle_sentiment_selection,
 )
+from src.slack_bot.views import open_feedback_modal  # For opening the modal
 
 # Load environment variables from .env file
 load_dotenv()
@@ -76,6 +79,42 @@ def command_ping(ack, respond):
     logger.info("Received ping command")
     # Respond to the command
     respond("Pong! :table_tennis_paddle_and_ball:")
+
+
+@app.command("/test-feedback")
+def handle_test_feedback_command(ack, command, client, logger, respond):
+    """Handles the /test-feedback slash command to open the feedback modal."""
+    ack()
+    try:
+        user_id = command["user_id"]
+        channel_id = command.get(
+            "channel_id"
+        )  # Might be None if used in DMs with the bot
+        trigger_id = command["trigger_id"]
+
+        # Create a new session
+        session_id = str(uuid.uuid4())
+        new_session = SessionData(
+            session_id=session_id, user_id=user_id, channel_id=channel_id
+        )
+        session_store.add_session(new_session)
+        logger.info(
+            f"Created new session '{session_id}' for /test-feedback command from user '{user_id}'."
+        )
+
+        # Open the modal
+        open_feedback_modal(
+            client=client, trigger_id=trigger_id, session_id=session_id, logger=logger
+        )
+        logger.info(
+            f"Opened feedback modal for session '{session_id}' triggered by user '{user_id}'."
+        )
+
+    except Exception as e:
+        logger.error(f"Error handling /test-feedback command: {e}", exc_info=True)
+        respond(
+            text="Sorry, something went wrong while trying to open the feedback form. Please try again."
+        )
 
 
 # Example app mention handler
