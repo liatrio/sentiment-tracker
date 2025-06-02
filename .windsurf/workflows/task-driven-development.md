@@ -59,11 +59,11 @@ Let's work through each subtask one by one:
 
 {{#each subtasks}}
   # Working on subtask {{this.id}}: {{this.title}}
-  
+
   ## Subtask evaluation
   Let me check if this subtask is already completed:
   mcp3_get_task --projectRoot="{{projectRoot}}" --id="{{this.id}}"
-  
+
   {{#if this.status == "done"}}
     This subtask is already completed. Moving to the next one.
   {{else}}
@@ -71,19 +71,19 @@ Let's work through each subtask one by one:
     1. First, I'll write tests for this functionality
     2. Then implement the code to make the tests pass
     3. Finally refactor while maintaining test coverage
-    
+
     ## Implementation
     {{this.details}}
-    
+
     ## Verification
     Let me verify the implementation passes tests and linting:
     run_command --Blocking=true --CommandLine="npm run lint" --Cwd="{{projectRoot}}"
     run_command --Blocking=true --CommandLine="npm test" --Cwd="{{projectRoot}}"
-    
+
     ## Commit changes
     mcp0_git_add --repo_path="{{projectRoot}}" --files=["."]
     mcp0_git_commit --repo_path="{{projectRoot}}" --message="{{commitType}}({{scope}}): {{this.title}} #{{issueNumber}}"
-    
+
     ## Update subtask status
     mcp3_set_task_status --projectRoot="{{projectRoot}}" --id="{{this.id}}" --status="done"
   {{/if}}
