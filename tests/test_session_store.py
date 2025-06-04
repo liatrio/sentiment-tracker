@@ -10,24 +10,34 @@ from src.session_store import ThreadSafeSessionStore
 class TestSessionData(unittest.TestCase):
     def test_session_data_creation(self):
         session_id = "session123"
-        user_id = "user456"
+        initiator_user_id = "user456"
+        target_user_ids = ["target_user_for_session123"]
         channel_id = "channel789"
         initial_feedback = "Initial thought"
 
-        session = SessionData(session_id, user_id, channel_id, initial_feedback)
+        session = SessionData(
+            session_id, initiator_user_id, channel_id, target_user_ids
+        )
+        session.add_feedback(initial_feedback)
 
         self.assertEqual(session.session_id, session_id)
-        self.assertEqual(session.user_id, user_id)
+        self.assertEqual(session.initiator_user_id, initiator_user_id)
+        self.assertEqual(session.target_user_ids, target_user_ids)
         self.assertEqual(session.channel_id, channel_id)
         self.assertEqual(session.feedback_items, [initial_feedback])
         self.assertIsInstance(session.created_at, datetime.datetime)
         self.assertEqual(session.created_at.tzinfo, datetime.timezone.utc)
-        self.assertEqual(session.created_at, session.last_accessed_at)
+        self.assertLessEqual(session.created_at, session.last_accessed_at)
         self.assertFalse(session.is_complete)
         self.assertIsNone(session.anonymized_summary)
 
     def test_add_feedback(self):
-        session = SessionData("s1", "u1", "c1")
+        session = SessionData(
+            session_id="s1",
+            initiator_user_id="u1",
+            channel_id="c1",
+            target_user_ids=["u1_target"],
+        )
         original_last_accessed = session.last_accessed_at
         # Ensure time changes, even a small delay might not be enough on fast systems
         # So we'll check for greater or equal and rely on the logic itself.
@@ -43,7 +53,12 @@ class TestSessionData(unittest.TestCase):
         )
 
     def test_complete_session(self):
-        session = SessionData("s1", "u1", "c1")
+        session = SessionData(
+            session_id="s1",
+            initiator_user_id="u1",
+            channel_id="c1",
+            target_user_ids=["u1_target"],
+        )
         original_last_accessed = session.last_accessed_at
         time.sleep(0.001)
 
@@ -56,10 +71,14 @@ class TestSessionData(unittest.TestCase):
 
     def test_session_data_repr(self):
         session_id = "repr_session_001"
-        user_id = "repr_user_777"
+        initiator_user_id = "repr_user_777"
+        target_user_ids = ["target_repr_user_777"]
         channel_id = "repr_channel_888"
         initial_feedback = "Testing repr"
-        session = SessionData(session_id, user_id, channel_id, initial_feedback)
+        session = SessionData(
+            session_id, initiator_user_id, channel_id, target_user_ids
+        )
+        session.add_feedback(initial_feedback)
 
         # Add another feedback to change feedback_count
         session.add_feedback("Another repr test")
@@ -69,7 +88,8 @@ class TestSessionData(unittest.TestCase):
         representation = repr(session)
 
         self.assertIn(f"session_id='{session_id}'", representation)
-        self.assertIn(f"user_id='{user_id}'", representation)
+        self.assertIn(f"initiator_user_id='{initiator_user_id}'", representation)
+        self.assertIn(f"target_user_ids={target_user_ids}", representation)
         self.assertIn(
             "created_at='", representation
         )  # Check for the key, value is dynamic
@@ -82,8 +102,20 @@ class TestSessionData(unittest.TestCase):
 class TestThreadSafeSessionStore(unittest.TestCase):
     def setUp(self):
         self.store = ThreadSafeSessionStore()
-        self.session_data1 = SessionData("s1", "u1", "c1", "feedback1")
-        self.session_data2 = SessionData("s2", "u2", "c2", "feedback2")
+        self.session_data1 = SessionData(
+            session_id="s1",
+            initiator_user_id="u1",
+            channel_id="c1",
+            target_user_ids=["u1_target"],
+        )
+        self.session_data1.add_feedback("feedback1")
+        self.session_data2 = SessionData(
+            session_id="s2",
+            initiator_user_id="u2",
+            channel_id="c2",
+            target_user_ids=["u2_target"],
+        )
+        self.session_data2.add_feedback("feedback2")
 
     def test_add_and_get_session(self):
         self.store.add_session(self.session_data1)
@@ -97,7 +129,12 @@ class TestThreadSafeSessionStore(unittest.TestCase):
 
     def test_add_existing_session_raises_error(self):
         self.store.add_session(self.session_data1)
-        session_data_same_id = SessionData("s1", "u_other", "c_other")
+        session_data_same_id = SessionData(
+            session_id="s1",
+            initiator_user_id="u_other",
+            channel_id="c_other",
+            target_user_ids=["u_other_target"],
+        )
         with self.assertRaisesRegex(ValueError, "Session with ID s1 already exists."):
             self.store.add_session(session_data_same_id)
 
@@ -131,8 +168,14 @@ class TestThreadSafeSessionStore(unittest.TestCase):
 
         # Create a new object for update, as if it's a new state of the session
         updated_session_data = SessionData(
-            "s1", "u1_updated", "c1_updated", "feedback_updated"
+            session_id="s1",
+            initiator_user_id="u1_updated",
+            channel_id="c1_updated",
+            target_user_ids=[
+                "u1_target_updated"
+            ],  # Assuming target can also be updated or is consistent
         )
+        updated_session_data.add_feedback("feedback_updated")
         # Preserve creation time if that's the desired logic for an update
         updated_session_data.created_at = original_creation_time
         # last_accessed_at will be set by update_session
@@ -146,13 +189,18 @@ class TestThreadSafeSessionStore(unittest.TestCase):
         self.assertIs(
             retrieved_session, updated_session_data
         )  # Points to the new object
-        self.assertEqual(retrieved_session.user_id, "u1_updated")
+        self.assertEqual(retrieved_session.initiator_user_id, "u1_updated")
         self.assertEqual(retrieved_session.feedback_items, ["feedback_updated"])
         self.assertEqual(retrieved_session.created_at, original_creation_time)
         self.assertGreater(retrieved_session.last_accessed_at, original_last_accessed)
 
     def test_update_non_existent_session_raises_error(self):
-        non_existent_session_data = SessionData("nonexistent", "u", "c")
+        non_existent_session_data = SessionData(
+            session_id="nonexistent",
+            initiator_user_id="u",
+            channel_id="c",
+            target_user_ids=["u_target"],
+        )
         with self.assertRaisesRegex(
             ValueError, "Session with ID nonexistent not found for update."
         ):
@@ -183,7 +231,10 @@ class TestThreadSafeSessionStore(unittest.TestCase):
                 session_id = f"session_t{thread_id_val}_{i}"
                 # Pass actual values to SessionData constructor
                 session_data = SessionData(
-                    session_id, f"user_t{thread_id_val}", f"channel_t{thread_id_val}"
+                    session_id=session_id,
+                    initiator_user_id=f"user_t{thread_id_val}",
+                    channel_id=f"channel_t{thread_id_val}",
+                    target_user_ids=[f"target_t{thread_id_val}_{i}"],
                 )
                 self.store.add_session(session_data)
 
@@ -201,7 +252,14 @@ class TestThreadSafeSessionStore(unittest.TestCase):
         num_initial_sessions = 100  # Reduced
         initial_ids = [f"s_init_{i}" for i in range(num_initial_sessions)]
         for session_id in initial_ids:
-            self.store.add_session(SessionData(session_id, "u_init", "c_init"))
+            self.store.add_session(
+                SessionData(
+                    session_id=session_id,
+                    initiator_user_id="u_init",
+                    channel_id="c_init",
+                    target_user_ids=["u_init_target"],  # Added target_user_ids
+                )
+            )
 
         num_threads = 10
         ops_per_thread = 20  # Reduced
@@ -221,9 +279,10 @@ class TestThreadSafeSessionStore(unittest.TestCase):
                         # Or, focus this test on update/remove/get of existing items
                         # For now, let's try to update
                         updated_data = SessionData(
-                            session_id_to_op,
-                            f"user_updated_t{thread_id_val}_{i}",
-                            "channel_updated",
+                            session_id=session_id_to_op,
+                            initiator_user_id=f"user_updated_t{thread_id_val}_{i}",
+                            channel_id="channel_updated",
+                            target_user_ids=[f"target_updated_t{thread_id_val}_{i}"],
                         )
                         self.store.update_session(updated_data)
                     elif op_type == 1:  # Get
