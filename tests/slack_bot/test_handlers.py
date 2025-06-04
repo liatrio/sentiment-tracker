@@ -21,7 +21,12 @@ class TestHandlers(unittest.TestCase):
     def test_handle_feedback_modal_submission_success(self):
         """Test successful handling of feedback modal submission."""
         mock_session = SessionData(
-            session_id=self.session_id, user_id=self.user_id, channel_id=self.channel_id
+            session_id=self.session_id,
+            initiator_user_id=self.user_id,  # Assuming self.user_id is the initiator
+            channel_id=self.channel_id,
+            target_user_ids=[
+                self.user_id
+            ],  # For this test, initiator is also the target
         )
         self.mock_session_store.get_session.return_value = mock_session
 
