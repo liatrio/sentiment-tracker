@@ -1,3 +1,4 @@
+import atexit
 import logging
 import os
 import re
@@ -38,6 +39,17 @@ session_store = ThreadSafeSessionStore()
 
 # Initialize a single thread pool for the application
 executor = ThreadPoolExecutor(max_workers=10)
+
+
+def shutdown_executor():
+    """Gracefully shut down the thread pool executor."""
+    logger.info("Shutting down thread pool executor...")
+    executor.shutdown(wait=True)
+    logger.info("Thread pool executor shut down gracefully.")
+
+
+# Register the shutdown function to be called on exit
+atexit.register(shutdown_executor)
 
 
 # Log all incoming messages to help with debugging

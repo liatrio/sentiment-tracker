@@ -317,6 +317,23 @@ class TestProcessGatherFeedbackRequest:
         )
 
 
+# --- Tests for Executor Shutdown --- #
+
+
+@patch("src.app.atexit.register")
+def test_shutdown_executor_registered(mock_register):
+    """Test that the shutdown_executor function is registered with atexit."""
+    # Since atexit.register is called at import time, we need to reload the module
+    # to test the registration call.
+    import importlib
+
+    import src.app
+
+    importlib.reload(src.app)
+
+    mock_register.assert_called_once_with(src.app.shutdown_executor)
+
+
 # --- Tests for /test-feedback Command (No Change) --- #
 
 
