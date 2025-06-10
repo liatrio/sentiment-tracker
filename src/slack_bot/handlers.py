@@ -4,6 +4,7 @@ from typing import Any, Dict
 from slack_bolt import Ack
 from slack_sdk.web import WebClient
 
+from src.session_data import SessionData
 from src.session_store import ThreadSafeSessionStore
 
 logger = logging.getLogger(__name__)
@@ -59,18 +60,18 @@ def handle_feedback_modal_submission(
             f"Sentiment: '{selected_sentiment}', Well: '{feedback_well}', Improve: '{feedback_improve}'"
         )
 
-        session_data = session_store.get_session(session_id)
+        def _apply_feedback(session: SessionData) -> None:  # noqa: WPS430
+            session.feedback_sentiment = selected_sentiment
+            session.feedback_well = feedback_well
+            session.feedback_improve = feedback_improve
 
-        if session_data:
-            session_data.feedback_sentiment = selected_sentiment
-            session_data.feedback_well = feedback_well
-            session_data.feedback_improve = feedback_improve
-            # session_store.update_session(session_data) # Not strictly necessary if mutable
+        try:
+            session_store.modify_session(session_id, _apply_feedback)
             logger.info(
                 f"Updated session '{session_id}' with feedback: "
                 f"Sentiment: '{selected_sentiment}', Well='{feedback_well}', Improve='{feedback_improve}'"
             )
-        else:
+        except ValueError:
             logger.warning(
                 f"Session ID '{session_id}' was absent from the session store during modal submission."
             )

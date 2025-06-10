@@ -1,6 +1,6 @@
 import datetime
 import threading
-from typing import Dict, Optional
+from typing import Callable, Dict, Optional
 
 from src.session_data import SessionData
 
@@ -49,6 +49,38 @@ class ThreadSafeSessionStore:
             # Ensure last_accessed_at is updated on the object being stored
             session_data.last_accessed_at = datetime.datetime.now(datetime.timezone.utc)
             self._sessions[session_data.session_id] = session_data
+
+    def modify_session(
+        self,
+        session_id: str,
+        modifier: Callable[[SessionData], None],
+    ) -> SessionData:
+        """Atomically apply *modifier* to the session inside the lock.
+
+        The *modifier* callback receives the current :class:`SessionData` instance and
+        may mutate it in-place. The session's ``last_accessed_at`` timestamp is
+        refreshed automatically.
+
+        Args:
+            session_id: ID of the session to modify.
+            modifier: A callable that will be executed with the session as its only
+                argument while the internal lock is held.
+
+        Returns:
+            The modified :class:`SessionData` instance for convenience.
+
+        Raises:
+            ValueError: If *session_id* does not exist in the store.
+        """
+        with self._lock:
+            session = self._sessions.get(session_id)
+            if session is None:
+                raise ValueError(f"Session with ID {session_id} not found.")
+
+            modifier(session)
+            # Update last accessed timestamp after mutation
+            session.last_accessed_at = datetime.datetime.now(datetime.timezone.utc)
+            return session
 
     def remove_session(self, session_id: str) -> Optional[SessionData]:
         """Removes a session by its ID. Returns the removed session or None if not found."""
