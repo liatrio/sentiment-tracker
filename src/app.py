@@ -2,6 +2,7 @@ import logging
 import os
 import re
 import uuid  # For generating unique session IDs
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict
 
 from dotenv import load_dotenv
@@ -34,6 +35,9 @@ app = App(
 
 # Initialize session store
 session_store = ThreadSafeSessionStore()
+
+# Initialize a single thread pool for the application
+executor = ThreadPoolExecutor(max_workers=10)
 
 
 # Log all incoming messages to help with debugging
@@ -130,113 +134,92 @@ def handle_test_feedback_command(ack, command, client, logger, respond):
         respond(text="Sorry, an unexpected error occurred. Please try again.")
 
 
-@app.command("/gather-feedback")
-def handle_gather_feedback_command(
-    ack: Ack,
+def process_gather_feedback_request(
     command: Dict[str, Any],
     client: WebClient,
     logger: logging.Logger,
     respond: Respond,
 ):
-    """Handles the /gather-feedback slash command to initiate feedback collection."""
-    ack()
+    """Processes the core logic of the /gather-feedback command in a background thread."""
     try:
         user_id = command["user_id"]
         command_text = command.get("text", "")
         logger.info(
-            f"Received /gather-feedback command with text: '{command_text}' from user '{user_id}'"
+            f"Processing /gather-feedback from user '{user_id}' with text: '{command_text}'"
         )
 
-        # Regex to capture user group ID, handle (optional), and time (optional)
-        # Format: <!subteam^USERGROUP_ID|@handle> [in X minutes]
-        # Group 1: USERGROUP_ID (e.g., S06154498F7)
-        # Group 2: @handle (e.g., @dev-team) - optional
-        # Group 3: Time in minutes (e.g., 30) - optional
-        match = re.fullmatch(
-            r"<!subteam\^([A-Z0-9]+)(?:\|(@[\w-]+))?>(?:\s+in\s+(-?\d+)\s+minutes)?",
-            command_text.strip(),
+        # Regex to extract user group handle and optional time
+        pattern = re.compile(
+            r"for\s+<!subteam\^([A-Z0-9]+)\|@([^>]+)>(?:\s+in\s+(-?\d+)\s+minutes)?",
+            re.IGNORECASE,
         )
+        match = pattern.search(command_text)
 
         if not match:
-            logger.warning(
-                f"Invalid format for /gather-feedback '{command_text}' by user '{user_id}'. Usage: /gather-feedback @user-group [in X minutes]"
-            )
             respond(
-                "Sorry, that command format isn't right. Please use: `/gather-feedback @user-group [in X minutes]` (e.g., `/gather-feedback @design-team in 60 minutes`). Make sure to select the user group from the suggestions."
+                "I'm sorry, I didn't understand that. Please use the format: `/gather-feedback for @user-group [in X minutes]`"
             )
             return
 
         user_group_id = match.group(1)
-        user_group_handle = match.group(2)  # Might be None if not provided by Slack
+        user_group_handle = match.group(2)
         time_in_minutes_str = match.group(3)
+        user_group_name_for_message = f"<!subteam^{user_group_id}|@{user_group_handle}>"
 
-        user_group_name_for_message = (
-            user_group_handle if user_group_handle else user_group_id
-        )
-
-        time_in_minutes = None
-
+        # Validate and determine the session time
+        time_in_minutes = 0
         if time_in_minutes_str:
             try:
                 time_in_minutes = int(time_in_minutes_str)
                 if time_in_minutes <= 0:
                     logger.warning(
-                        f"Invalid time '{time_in_minutes_str}' for /gather-feedback by user '{command['user_id']}'. Time must be a positive integer."
+                        f"Invalid time '{time_in_minutes_str}' for /gather-feedback by user '{user_id}'. Time must be a positive integer."
                     )
-                    respond("The time limit must be a positive number of minutes.")
+                    respond("The time must be a positive number of minutes.")
                     return
             except ValueError:
                 logger.warning(
-                    f"Invalid non-numeric time value '{time_in_minutes_str}' for /gather-feedback from user '{user_id}'."
+                    f"Invalid time format '{time_in_minutes_str}' for /gather-feedback by user '{user_id}'."
                 )
-                respond("The time specified must be a number (e.g., '30').")
+                respond("Oops! The time specified must be a valid number.")
                 return
-        else:  # No time was specified in the command
+        else:
             default_session_minutes_str = os.environ.get("DEFAULT_SESSION_MINUTES", "5")
             try:
                 time_in_minutes = int(default_session_minutes_str)
                 if time_in_minutes <= 0:
-                    logger.warning(
-                        f"Invalid DEFAULT_SESSION_MINUTES value '{default_session_minutes_str}' (must be positive), defaulting to 5 minutes."
+                    logger.error(
+                        f"Invalid DEFAULT_SESSION_MINUTES '{default_session_minutes_str}'. Must be a positive integer. Falling back to 5."
                     )
                     time_in_minutes = 5
-                # Log that default is being used, after successfully setting it.
-                logger.info(
-                    f"Parsed for /gather-feedback from user '{user_id}': group_id='{user_group_id}', handle='{user_group_handle}', time not specified, using default: {time_in_minutes} minutes"
-                )
-            except ValueError:
-                logger.warning(
-                    f"Invalid DEFAULT_SESSION_MINUTES format '{default_session_minutes_str}' (must be an integer), defaulting to 5 minutes."
+            except (ValueError, TypeError):
+                logger.error(
+                    f"Invalid DEFAULT_SESSION_MINUTES '{default_session_minutes_str}'. Falling back to 5 minutes."
                 )
                 time_in_minutes = 5
-                logger.info(
-                    f"Parsed for /gather-feedback from user '{user_id}': group_id='{user_group_id}', handle='{user_group_handle}', time not specified, using fallback default: {time_in_minutes} minutes"
-                )
 
+        logger.info(
+            f"Parsed for /gather-feedback from user '{user_id}': group_id='{user_group_id}', handle='{user_group_handle}', time: {time_in_minutes} minutes"
+        )
+
+        # Fetch user IDs from the user group
         try:
-            usergroup_members_response = client.usergroups_users_list(
-                usergroup=user_group_id
-            )
-            member_user_ids = usergroup_members_response.get("users", [])
+            member_user_ids = client.usergroups_users_list(usergroup=user_group_id)[
+                "users"
+            ]
             if not member_user_ids:
-                logger.warning(
-                    f"User group '{user_group_name_for_message}' (ID: {user_group_id}) has no members or is invalid."
-                )
                 respond(
-                    f"The user group {user_group_name_for_message} doesn't seem to have any members. Please check the group or try a different one."
+                    f"The user group {user_group_name_for_message} doesn't have any members."
                 )
                 return
-            logger.info(
-                f"Found {len(member_user_ids)} members in group '{user_group_name_for_message}' (ID: {user_group_id}): {member_user_ids}"
-            )
         except SlackApiError as e:
             logger.error(
-                f"Slack API error fetching members for user group ID '{user_group_id}': {e.response['error']}",
+                f"Error getting members for group '{user_group_id}': {e.response['error']}",
                 exc_info=True,
             )
-            if e.response["error"] == "usergroup_not_found":
+            if e.response["error"] == "subteam_not_found":
                 respond(
-                    f"Sorry, I couldn't find the user group {user_group_name_for_message}. Please make sure it's a valid group."
+                    f"Sorry, I can't find a user group with the handle {user_group_name_for_message}. Please double-check the group handle."
                 )
             elif e.response["error"] == "missing_scope":
                 respond(
@@ -251,18 +234,17 @@ def handle_gather_feedback_command(
         # Create and store the feedback session
         session_id = str(uuid.uuid4())
         initiator_user_id = command["user_id"]
-        channel_id = command["channel_id"]
+        channel_id = command.get("channel_id")
 
         new_session = SessionData(
             session_id=session_id,
-            initiator_user_id=initiator_user_id,  # User who initiated
-            channel_id=channel_id,  # Channel where the command was invoked
-            target_user_ids=member_user_ids,  # List of user IDs from the group
-            time_limit_minutes=time_in_minutes,  # Optional time limit
-            # TODO: Add other relevant fields to SessionData if needed e.g. original_command_text
+            initiator_user_id=initiator_user_id,
+            channel_id=channel_id,
+            target_user_ids=member_user_ids,
+            time_limit_minutes=time_in_minutes,
         )
         session_store.add_session(new_session)
-        # time_in_minutes should now always have a value (either user-provided or default)
+
         time_desc_for_log = f"{time_in_minutes} minutes"
         logger.info(
             f"Created and stored session '{session_id}' for user group '{user_group_name_for_message}' "
@@ -270,7 +252,6 @@ def handle_gather_feedback_command(
             f"time limit: {time_desc_for_log}."
         )
 
-        # time_in_minutes should now always have a value
         time_message_segment = f"for {time_in_minutes} minutes"
         respond(
             f"Okay, I've initiated a feedback session (ID: {session_id}) for "
@@ -278,18 +259,45 @@ def handle_gather_feedback_command(
             f"{time_message_segment}. I'll reach out to them shortly."
         )
 
-        # TODO: Implement further steps:
-        # 1. Logic to DM each user in member_user_ids to collect feedback.
-        # 2. Set a timer for session expiration and reminders based on time_in_minutes.
-
     except Exception as e:
         logger.error(
-            f"Error handling /gather-feedback command for user '{command.get('user_id', 'unknown')}': {e}",
+            f"Error processing /gather-feedback request for user '{command.get('user_id', 'unknown')}': {e}",
             exc_info=True,
         )
         respond(
             "Sorry, an unexpected error occurred while processing your request. Please try again."
         )
+
+
+@app.command("/gather-feedback")
+def handle_gather_feedback_command(
+    ack: Ack,
+    command: Dict[str, Any],
+    client: WebClient,
+    logger: logging.Logger,
+    respond: Respond,
+):
+    """Handles the /gather-feedback slash command to initiate feedback collection."""
+    ack()
+    try:
+        # Submit the long-running task to the thread pool
+        executor.submit(
+            process_gather_feedback_request,
+            command=command,
+            client=client,
+            logger=logger,
+            respond=respond,
+        )
+        logger.info(
+            f"Submitted /gather-feedback request for user '{command['user_id']}' to thread pool."
+        )
+
+    except Exception as e:
+        logger.error(
+            f"Error submitting /gather-feedback for user '{command['user_id']}' to thread pool: {e}",
+            exc_info=True,
+        )
+        respond("Sorry, there was an issue submitting your request. Please try again.")
 
 
 # Example app mention handler
