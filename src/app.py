@@ -17,6 +17,8 @@ from src.session_store import ThreadSafeSessionStore
 from src.slack_bot.handlers import handle_feedback_modal_submission
 from src.slack_bot.views import open_feedback_modal  # For opening the modal
 
+from .scheduler import Scheduler
+
 # Load environment variables from .env file
 load_dotenv()
 
@@ -40,12 +42,55 @@ session_store = ThreadSafeSessionStore()
 # Initialize a single thread pool for the application
 executor = ThreadPoolExecutor(max_workers=10)
 
+# Shared scheduler for non-blocking timers (e.g., session expiry reminders)
+scheduler = Scheduler(executor)
+
+
+# ------------------------------------------------------------------
+# Expiry / reminder hooks
+# ------------------------------------------------------------------
+
+
+def _expire_feedback_session(
+    session_id: str, initiator_user_id: str, client: WebClient
+):
+    """Callback run by Scheduler when a feedback session times out."""
+    try:
+        session = session_store.remove_session(session_id)
+        if session is None:
+            logger.debug("Expiry callback: session %s already removed", session_id)
+            return
+        # Notify initiator that the session expired (best-effort)
+        try:
+            client.chat_postMessage(
+                channel=initiator_user_id,
+                text=(
+                    f"Your feedback session *{session_id}* has reached its time limit and is now closed.\n"
+                    "Thanks for using the feedback bot!"
+                ),
+            )
+        except SlackApiError as exc:
+            logger.warning(
+                "Failed to send expiry DM for session %s: %s",
+                session_id,
+                exc.response["error"],
+            )
+        logger.info("Session %s expired and removed after time limit.", session_id)
+    except Exception:  # pragma: no cover – ensure scheduler thread survives
+        logger.exception("Error expiring session %s", session_id)
+
 
 def shutdown_executor():
-    """Gracefully shut down the thread pool executor."""
-    logger.info("Shutting down thread pool executor...")
+    """Gracefully shut down scheduler and thread pool executor."""
+    logger.info("Shutting down scheduler and thread pool executor...")
+    # Stop scheduler first so it doesn't submit new tasks while executor is shutting down
+    try:
+        scheduler.shutdown()
+    except Exception:  # pragma: no cover – ensure shutdown continues
+        logger.exception("Error shutting down scheduler")
+
     executor.shutdown(wait=True)
-    logger.info("Thread pool executor shut down gracefully.")
+    logger.info("Scheduler and thread pool executor shut down gracefully.")
 
 
 # Register the shutdown function to be called on exit
@@ -256,6 +301,16 @@ def process_gather_feedback_request(
             time_limit_minutes=time_in_minutes,
         )
         session_store.add_session(new_session)
+
+        # Schedule automatic session expiry
+        delay_seconds = time_in_minutes * 60
+        scheduler.schedule(
+            delay_seconds,
+            _expire_feedback_session,
+            session_id,
+            initiator_user_id,
+            client,
+        )
 
         time_desc_for_log = f"{time_in_minutes} minutes"
         logger.info(
