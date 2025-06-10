@@ -46,6 +46,7 @@ This document outlines key development practices for the Sentiment Tracker proje
 - **Unit Testing**:
     - Run tests frequently: `task test` (includes coverage report).
     - **All tests MUST pass** before committing or creating a PR.
+    - Before commiting check and fix broken pre-commit hooks by running `task pre-commit`
 
 ## 5. Testing Strategy
 - **Unit Tests**: Write for all new functions and significant logic changes. Mock external services (Slack, OpenAI).
