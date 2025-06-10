@@ -15,6 +15,7 @@ This document outlines key development practices for the Sentiment Tracker proje
     - Develop in feature branches (e.g., `feat/feature-name`, `fix/bug-fix`).
     - Use Pull Requests (PRs) for merging to `main` (if applicable, ensure review).
     - Prefer rebasing feature branches onto `main` before merging for a clean, linear history.
+    - Always execute `task pre-commit-run` (or `pre-commit run --all-files`) **and stage the resulting changes** *before* you invoke `git commit`.
 - **Conventional Commits**:
     - Adhere strictly to [Conventional Commits specification](https://www.conventionalcommits.org/).
     - **Format**: `<type>(<scope>): <subject>` (e.g., `feat(auth): add OTP login`).
@@ -46,7 +47,6 @@ This document outlines key development practices for the Sentiment Tracker proje
 - **Unit Testing**:
     - Run tests frequently: `task test` (includes coverage report).
     - **All tests MUST pass** before committing or creating a PR.
-    - Before commiting check and fix broken pre-commit hooks by running `task pre-commit`
 
 ## 5. Testing Strategy
 - **Unit Tests**: Write for all new functions and significant logic changes. Mock external services (Slack, OpenAI).
