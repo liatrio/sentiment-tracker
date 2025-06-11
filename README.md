@@ -28,6 +28,13 @@ A Slack bot designed to collect and analyze team sentiment through interactive f
      ```
    - Update `.env` with your Slack tokens
 
+### Environment variables
+
+| Variable | Description |
+|----------|-------------|
+| `OPENAI_API_KEY` | Required for OpenAI integration |
+| `OPENAI_MODEL` | Optional. Defaults to `gpt-4.1` used by the helper |
+
 ## Running Locally
 
 Start the bot using Docker Compose:
