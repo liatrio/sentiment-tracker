@@ -8,7 +8,6 @@ from typing import Any, Dict
 
 from dotenv import load_dotenv
 from slack_bolt import Ack, App, Respond
-from slack_bolt.adapter.socket_mode import SocketModeHandler
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
@@ -394,26 +393,4 @@ def feedback_modal_submission_handler_wrapper(ack, body, client, view, logger):
     )
 
 
-# Main entry point for the app
-if __name__ == "__main__":  # pragma: no cover
-    logger.info("Starting the Slack bot app...")
-    try:
-        # Start the app using Socket Mode
-        handler = SocketModeHandler(app, os.environ.get("SLACK_APP_TOKEN"))
-        logger.info("Socket Mode handler initialized")
-        logger.info(
-            "Bot is ready to receive messages. "
-            "Try sending 'hello' in a channel where the bot is invited."
-        )
-        handler.start()
-    except Exception as e:
-        logger.error(f"Error starting the app: {e}")
-        logger.error(
-            "Make sure both SLACK_BOT_TOKEN and SLACK_APP_TOKEN are correct"
-            " in your .env file"
-        )
-        logger.error(
-            "Also verify the bot has been invited to the channel"
-            " and has the necessary scopes"
-        )
-        raise
+# NOTE: Runtime startup moved to src/main.py to keep this module import-safe and testable.
