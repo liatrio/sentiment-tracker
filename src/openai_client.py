@@ -88,4 +88,27 @@ def chat_completion(
 
     openai = get_openai_client()
 
+    # The OpenAI Python client changed its interface in version 1.0.0.
+    # • <1.0 – ``openai.ChatCompletion.create`` returns a ``dict``-like object.
+    # • ≥1.0 – ``openai.chat.completions.create`` returns a Pydantic model.
+    #
+    # We support both versions transparently and always return a legacy-style
+    # ``dict`` with at least ``{"choices": [{"message": {"content": ...}}]}`` so
+    # downstream code (including tests) can stay the same.
+
+    # Prefer the *new* API if available, otherwise fall back.
+    chat_api_new = getattr(getattr(openai, "chat", None), "completions", None)
+    if callable(getattr(chat_api_new, "create", None)):
+        # New >=1.0 style
+        completion = chat_api_new.create(model=model, messages=messages, **kwargs)
+
+        # Convert the Pydantic model to a minimal legacy-compatible dict.
+        # Each choice has ``message.content``.
+        choices = [
+            {"message": {"content": choice.message.content}}
+            for choice in completion.choices
+        ]
+        return {"choices": choices, "model": completion.model}
+
+    # Legacy <1.0 style
     return openai.ChatCompletion.create(model=model, messages=messages, **kwargs)
