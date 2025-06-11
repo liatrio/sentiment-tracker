@@ -1,0 +1,27 @@
+*:memo: Feedback Report – Session {{ session_id }} ({{ date }})*
+
+*Participation*: {{ stats.submitted }}/{{ stats.total_participants }} responded{% if stats.low_participation %} – low participation :warning:{% endif %}
+
+*Sentiment*
+{{ emoji_bar }}
+Positive {{ sentiment_counts.get('positive', 0) }} | Neutral {{ sentiment_counts.get('neutral', 0) }} | Negative {{ sentiment_counts.get('negative', 0) }}
+
+{% if themes %}*Top Themes*
+{% for theme in themes %}• {{ theme }}
+{% endfor %}
+{% endif %}
+
+*Highlights*
+• *What went well*
+{% for item in bullets_well %}{{ item }}
+{% endfor %}
+
+• *What could improve*
+{% for item in bullets_improve %}{{ item }}
+{% endfor %}
+
+*All Anonymized Comments*
+{% for item in all_items %}> {{ item }}
+{% endfor %}
+
+_Automated report v{{ version }}_

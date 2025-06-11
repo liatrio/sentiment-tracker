@@ -8,6 +8,8 @@ mypy~=1.3.0
 # Testing (for the next step)
 pytest~=7.4.0
 pytest-cov~=4.1.0 # For coverage reports
+# Template engine used in tests
+Jinja2>=3.1
 
 # Pre-commit hooks
 pre-commit~=3.3.0

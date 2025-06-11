@@ -190,6 +190,15 @@ def handle_feedback_modal_submission(
                     processed.sentiment_counts,
                     processed.stats,
                 )
+
+                # Post full report to the original channel (or DM initiator)
+                from src.reporting.render import post_report_to_slack  # local import
+
+                post_report_to_slack(
+                    processed=processed,
+                    client=client,
+                    channel=updated_session.channel_id,
+                )
             except Exception as agg_exc:  # pragma: no cover – protect runtime
                 logger.error("Aggregation failed for %s: %s", session_id, agg_exc)
 
