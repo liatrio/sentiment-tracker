@@ -4,7 +4,7 @@ import os
 import re
 import uuid  # For generating unique session IDs
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from dotenv import load_dotenv
 from slack_bolt import Ack, App, Respond
@@ -35,8 +35,29 @@ app = App(
     process_before_response=True,
 )
 
-# Initialize session store
-session_store = ThreadSafeSessionStore()
+
+# Resolve max concurrent sessions (optional limit)
+def _get_max_sessions_from_env() -> Optional[int]:  # noqa: WPS430 – tiny helper
+    raw_val = os.getenv("MAX_CONCURRENT_SESSIONS")
+    if not raw_val:
+        return None
+    try:
+        parsed = int(raw_val)
+        if parsed <= 0:
+            logger.warning(
+                "Ignoring MAX_CONCURRENT_SESSIONS=%s (must be positive int)", raw_val
+            )
+            return None
+        return parsed
+    except ValueError:
+        logger.warning(
+            "Invalid MAX_CONCURRENT_SESSIONS value '%s'; must be integer.", raw_val
+        )
+        return None
+
+
+# Initialize session store with optional limit
+session_store = ThreadSafeSessionStore(max_sessions=_get_max_sessions_from_env())
 
 # Initialize a single thread pool for the application
 executor = ThreadPoolExecutor(max_workers=10)
