@@ -179,12 +179,26 @@ def handle_feedback_modal_submission(
 
         # Notify initiator if session complete (only after successful update)
         if updated_session.is_complete:
+            # ------------------------------------------------------------------
+            # Aggregate feedback data now that collection is complete
+            # ------------------------------------------------------------------
+            try:
+                processed = session_store.process_feedback(session_id)
+                logger.info(
+                    "Aggregated feedback for %s: sentiments=%s, stats=%s",
+                    session_id,
+                    processed.sentiment_counts,
+                    processed.stats,
+                )
+            except Exception as agg_exc:  # pragma: no cover – protect runtime
+                logger.error("Aggregation failed for %s: %s", session_id, agg_exc)
+
             try:
                 client.chat_postMessage(
                     channel=updated_session.initiator_user_id,
                     text=(
                         f"All participants have submitted feedback for session *{session_id}*. "
-                        "Thank you!"
+                        "Processing complete. You'll receive the report shortly!"
                     ),
                 )
             except Exception as post_exc:  # noqa: WPS110
