@@ -4,6 +4,7 @@ import threading
 from typing import Callable, Dict, Optional
 
 from src.exceptions import AlreadySubmittedError
+from src.reporting.aggregator import process_session
 from src.session_data import SessionData
 
 
@@ -156,3 +157,20 @@ class ThreadSafeSessionStore:
     def get_active_sessions(self) -> Dict[str, SessionData]:
         """Return copy of active sessions for diagnostics."""
         return self.get_all_sessions()
+
+    # ------------------------------------------------------------------
+    # Reporting helper
+    # ------------------------------------------------------------------
+
+    def process_feedback(self, session_id: str):
+        """Return aggregated feedback for *session_id* using reporting pipeline.
+
+        Raises
+        ------
+        ValueError
+            If the session does not exist.
+        """
+        session = self.get_session(session_id)
+        if session is None:
+            raise ValueError(f"Session {session_id} not found for processing.")
+        return process_session(session)
