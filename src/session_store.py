@@ -1,7 +1,9 @@
 import datetime
+import logging
 import threading
 from typing import Callable, Dict, Optional
 
+from src.exceptions import AlreadySubmittedError
 from src.session_data import SessionData
 
 
@@ -19,6 +21,7 @@ class ThreadSafeSessionStore:
         self._lock = threading.Lock()
         # None == unlimited
         self._max_sessions = max_sessions if (max_sessions or 0) > 0 else None
+        self._logger = logging.getLogger(__name__)
 
     def add_session(self, session_data: SessionData) -> None:
         """
@@ -114,3 +117,42 @@ class ThreadSafeSessionStore:
         """Returns the total number of active sessions."""
         with self._lock:
             return len(self._sessions)
+
+    # ------------------------------------------------------------------
+    # New lifecycle helpers
+    # ------------------------------------------------------------------
+
+    def submit_feedback(
+        self, session_id: str, user_id: str, feedback_item: str
+    ) -> None:
+        """Record feedback for a participant and update session state atomically."""
+
+        def _apply(session: SessionData) -> None:  # noqa: WPS430 – local helper
+            session.submit(user_id, feedback_item)
+            if session.is_complete:
+                self._logger.info(
+                    "session_done", extra={"session_id": session.session_id}
+                )
+
+        try:
+            self.modify_session(session_id, _apply)
+            self._logger.info(
+                "feedback_received",
+                extra={"session_id": session_id, "user_id": user_id},
+            )
+        except AlreadySubmittedError:
+            raise
+        except ValueError:
+            raise
+
+    def mark_done(self, session_id: str) -> None:
+        """Set session as completed and remove it from store (idempotent)."""
+        with self._lock:
+            session = self._sessions.pop(session_id, None)
+        if session is not None:
+            session.complete_session("")  # store empty summary placeholder
+            self._logger.info("session_done", extra={"session_id": session_id})
+
+    def get_active_sessions(self) -> Dict[str, SessionData]:
+        """Return copy of active sessions for diagnostics."""
+        return self.get_all_sessions()
