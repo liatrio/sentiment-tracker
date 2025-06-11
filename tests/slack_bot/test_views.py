@@ -230,7 +230,9 @@ class TestViews(unittest.TestCase):
     # New tests for invitation message
     def test_build_invitation_message(self):
         session_id = "sess-123"
-        blocks = build_invitation_message(session_id)
+        initiator_user_id = "U_INIT"
+        channel_id = "C_CHAN"
+        blocks = build_invitation_message(session_id, initiator_user_id, channel_id)
         # Ensure it returns list[dict]
         assert isinstance(blocks, list)
         assert all(isinstance(b, dict) for b in blocks)
@@ -240,6 +242,10 @@ class TestViews(unittest.TestCase):
         button = button_block["elements"][0]
         assert session_id in button["value"]
         assert button["text"]["text"] == "Provide Feedback"
+        # Verify intro text contains initiator and channel ref
+        section_block = next((b for b in blocks if b.get("type") == "section"), None)
+        assert f"<@{initiator_user_id}>" in section_block["text"]["text"]
+        assert f"<#{channel_id}>" in section_block["text"]["text"]
 
 
 if __name__ == "__main__":

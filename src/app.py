@@ -265,14 +265,14 @@ def process_gather_feedback_request(
 
         # Regex to extract user group handle and optional time
         pattern = re.compile(
-            r"for\s+<!subteam\^([A-Z0-9]+)\|@([^>]+)>(?:\s+in\s+(-?\d+)\s+minutes)?",
+            r"(?:from|for)\s+<!subteam\^([A-Z0-9]+)\|@([^>]+)>(?:\s+(?:for|in)\s+(-?\d+)\s+(?:minutes?|mins?))?",
             re.IGNORECASE,
         )
         match = pattern.search(command_text)
 
         if not match:
             respond(
-                "I'm sorry, I didn't understand that. Please use the format: `/gather-feedback for @user-group [in X minutes]`"
+                "I'm sorry, I didn't understand that. Please use the format: `/gather-feedback from @user-group [for X min]`"
             )
             return
 
@@ -361,7 +361,11 @@ def process_gather_feedback_request(
         session_store.add_session(new_session)
 
         # DM each participant with invitation button
-        invite_blocks = build_invitation_message(session_id)
+        invite_blocks = build_invitation_message(
+            session_id=session_id,
+            initiator_user_id=initiator_user_id,
+            channel_id=channel_id,
+        )
         failures = 0
         for target_user_id in member_user_ids:
             try:

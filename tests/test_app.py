@@ -242,7 +242,7 @@ class TestProcessGatherFeedbackRequest:
             logger=mock_logger,
         )
         mock_respond.assert_called_once_with(
-            "I'm sorry, I didn't understand that. Please use the format: `/gather-feedback for @user-group [in X minutes]`"
+            "I'm sorry, I didn't understand that. Please use the format: `/gather-feedback from @user-group [for X min]`"
         )
 
     @patch("src.app.logger")
