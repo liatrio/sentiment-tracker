@@ -8,9 +8,17 @@ from src.session_data import SessionData
 class ThreadSafeSessionStore:
     """A thread-safe store for managing feedback sessions in memory."""
 
-    def __init__(self):
+    def __init__(self, max_sessions: Optional[int] = None):
+        """Create a new :class:`ThreadSafeSessionStore`.
+
+        Args:
+            max_sessions: Optional maximum number of *concurrent* active
+                sessions allowed.  :pydata:`None` (default) means unlimited.
+        """
         self._sessions: Dict[str, SessionData] = {}
         self._lock = threading.Lock()
+        # None == unlimited
+        self._max_sessions = max_sessions if (max_sessions or 0) > 0 else None
 
     def add_session(self, session_data: SessionData) -> None:
         """
@@ -18,6 +26,16 @@ class ThreadSafeSessionStore:
         Raises ValueError if a session with the same ID already exists.
         """
         with self._lock:
+            # Check global limit first so we fail fast under high load.
+            if (
+                self._max_sessions is not None
+                and len(self._sessions) >= self._max_sessions
+            ):
+                raise ValueError(
+                    "Maximum concurrent session limit reached. "
+                    "Try again later or finish existing sessions."
+                )
+
             if session_data.session_id in self._sessions:
                 raise ValueError(
                     f"Session with ID {session_data.session_id} already exists."
