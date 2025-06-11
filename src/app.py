@@ -13,8 +13,14 @@ from slack_sdk.errors import SlackApiError
 
 from src.session_data import SessionData  # For creating new sessions
 from src.session_store import ThreadSafeSessionStore
-from src.slack_bot.handlers import handle_feedback_modal_submission
-from src.slack_bot.views import open_feedback_modal  # For opening the modal
+from src.slack_bot.handlers import (  # For opening the modal and building invitation message
+    handle_feedback_button_click,
+    handle_feedback_modal_submission,
+)
+from src.slack_bot.views import (  # For opening the modal and building invitation message
+    build_invitation_message,
+    open_feedback_modal,
+)
 
 from .scheduler import Scheduler
 
@@ -262,14 +268,14 @@ def process_gather_feedback_request(
 
         # Regex to extract user group handle and optional time
         pattern = re.compile(
-            r"for\s+<!subteam\^([A-Z0-9]+)\|@([^>]+)>(?:\s+in\s+(-?\d+)\s+minutes)?",
+            r"(?:from|for)\s+<!subteam\^([A-Z0-9]+)\|@([^>]+)>(?:\s+(?:for|in)\s+(-?\d+)\s+(?:minutes?|mins?))?",
             re.IGNORECASE,
         )
         match = pattern.search(command_text)
 
         if not match:
             respond(
-                "I'm sorry, I didn't understand that. Please use the format: `/gather-feedback for @user-group [in X minutes]`"
+                "I'm sorry, I didn't understand that. Please use the format: `/gather-feedback from @user-group [for X min]`"
             )
             return
 
@@ -356,6 +362,33 @@ def process_gather_feedback_request(
             time_limit_minutes=time_in_minutes,
         )
         session_store.add_session(new_session)
+
+        # DM each participant with invitation button
+        invite_blocks = build_invitation_message(
+            session_id=session_id,
+            initiator_user_id=initiator_user_id,
+            channel_id=channel_id,
+        )
+        failures = 0
+        for target_user_id in member_user_ids:
+            try:
+                client.chat_postMessage(
+                    channel=target_user_id,
+                    text="You have been invited to provide feedback.",
+                    blocks=invite_blocks,
+                )
+                logger.info(
+                    "feedback_invitation_sent",
+                    extra={"session_id": session_id, "target_user_id": target_user_id},
+                )
+            except SlackApiError as exc:
+                failures += 1
+                logger.warning(
+                    "Failed to send feedback invitation to %s in session %s: %s",
+                    target_user_id,
+                    session_id,
+                    exc.response.get("error", str(exc)),
+                )
 
         # Schedule automatic session expiry
         delay_seconds = time_in_minutes * 60
@@ -472,6 +505,20 @@ def feedback_modal_submission_handler_wrapper(ack, body, client, view, logger):
         body=body,
         client=client,
         view=view,
+        logger=logger,
+        session_store=session_store,
+    )
+
+
+# Register action handler for "Provide Feedback" button
+@app.action("open_feedback_modal")
+def feedback_button_click_wrapper(
+    ack, body, client, logger
+):  # noqa: WPS110 – slack signature
+    handle_feedback_button_click(
+        ack=ack,
+        body=body,
+        client=client,
         logger=logger,
         session_store=session_store,
     )
