@@ -1,6 +1,6 @@
 import logging
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import ANY, MagicMock
 
 from src.session_data import SessionData
 from src.slack_bot.handlers import handle_feedback_modal_submission
@@ -28,7 +28,13 @@ class TestHandlers(unittest.TestCase):
                 self.user_id
             ],  # For this test, initiator is also the target
         )
-        self.mock_session_store.get_session.return_value = mock_session
+
+        def _modify_side_effect(sid, modifier):
+            self.assertEqual(sid, self.session_id)
+            modifier(mock_session)
+            return mock_session
+
+        self.mock_session_store.modify_session.side_effect = _modify_side_effect
 
         feedback_well_text = "Everything was great!"
         feedback_improve_text = "Maybe add more unicorns."
@@ -66,7 +72,9 @@ class TestHandlers(unittest.TestCase):
         )
 
         self.mock_ack.assert_called_once_with()
-        self.mock_session_store.get_session.assert_called_once_with(self.session_id)
+        self.mock_session_store.modify_session.assert_called_once_with(
+            self.session_id, ANY
+        )
         self.assertEqual(mock_session.feedback_sentiment, selected_sentiment_value)
         self.assertEqual(mock_session.feedback_well, feedback_well_text)
         self.assertEqual(mock_session.feedback_improve, feedback_improve_text)
@@ -81,7 +89,7 @@ class TestHandlers(unittest.TestCase):
 
     def test_handle_feedback_modal_submission_session_not_found(self):
         """Test modal submission handling when session is not found."""
-        self.mock_session_store.get_session.return_value = None
+        self.mock_session_store.modify_session.side_effect = ValueError("not found")
 
         view_data = {
             "private_metadata": self.session_id,
@@ -113,14 +121,18 @@ class TestHandlers(unittest.TestCase):
         )
 
         self.mock_ack.assert_called_once_with()
-        self.mock_session_store.get_session.assert_called_once_with(self.session_id)
+        self.mock_session_store.modify_session.assert_called_once_with(
+            self.session_id, ANY
+        )
         self.mock_logger.warning.assert_called_once_with(
             f"Session ID '{self.session_id}' was absent from the session store during modal submission."
         )
 
     def test_handle_feedback_modal_submission_exception_handling(self):
         """Test exception handling during feedback modal submission."""
-        self.mock_session_store.get_session.side_effect = Exception("Submission error")
+        self.mock_session_store.modify_session.side_effect = Exception(
+            "Submission error"
+        )
 
         view_data = {
             "private_metadata": self.session_id,
