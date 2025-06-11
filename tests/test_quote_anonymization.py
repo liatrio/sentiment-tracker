@@ -5,7 +5,7 @@ from typing import List
 
 import pytest
 
-from src.analysis import anonymize_quotes as aq
+import src.analysis.anonymize as az
 
 
 @pytest.fixture(autouse=True)
@@ -17,7 +17,7 @@ def patch_chat(monkeypatch):
         content = '["redacted 1", "redacted 2"]'
         return {"choices": [{"message": {"content": content}}]}
 
-    monkeypatch.setattr(aq, "chat_completion", _fake_chat)
+    monkeypatch.setattr(az, "chat_completion", _fake_chat)
     yield
 
 
@@ -26,9 +26,9 @@ def test_anonymize_basic():
         "Alice said the deployment was late.",
         "@bob thinks we should refactor the module.",
     ]
-    result: List[str] = aq.anonymize_quotes(quotes)
+    result: List[str] = az.anonymize_quotes(quotes)
     assert result == ["redacted 1", "redacted 2"]
 
 
 def test_anonymize_empty():
-    assert aq.anonymize_quotes([]) == []
+    assert az.anonymize_quotes([]) == []
