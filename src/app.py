@@ -100,6 +100,41 @@ def _expire_feedback_session(
         logger.exception("Error expiring session %s", session_id)
 
 
+def _send_pending_reminder(session_id: str, client: WebClient) -> None:
+    """DM pending users one minute before session expiry."""
+    try:
+        session = session_store.get_session(session_id)
+        if session is None or session.is_complete:
+            logger.debug("Reminder skipped for session %s (done/absent)", session_id)
+            return
+        failures = 0
+        for user_id in list(session.pending_users):
+            try:
+                client.chat_postMessage(
+                    channel=user_id,
+                    text=(
+                        "⏰ Friendly reminder: you have *1 minute* left to submit feedback "
+                        f"for session `{session_id}`. Please open the modal and send your input!"
+                    ),
+                )
+            except SlackApiError as exc:
+                failures += 1
+                logger.warning(
+                    "Failed to send reminder DM to %s for session %s: %s",
+                    user_id,
+                    session_id,
+                    exc.response["error"],
+                )
+        logger.info(
+            "Sent 1-minute reminder for session %s to %d user(s) (%d failures)",
+            session_id,
+            len(session.pending_users),
+            failures,
+        )
+    except Exception:  # pragma: no cover – ensure scheduler thread survives
+        logger.exception("Error sending reminder for session %s", session_id)
+
+
 def shutdown_executor():
     """Gracefully shut down scheduler and thread pool executor."""
     logger.info("Shutting down scheduler and thread pool executor...")
@@ -331,6 +366,14 @@ def process_gather_feedback_request(
             initiator_user_id,
             client,
         )
+        # Schedule 1-minute reminder if time allows (>60s)
+        if delay_seconds > 60:
+            scheduler.schedule(
+                delay_seconds - 60,
+                _send_pending_reminder,
+                session_id,
+                client,
+            )
 
         time_desc_for_log = f"{time_in_minutes} minutes"
         logger.info(
