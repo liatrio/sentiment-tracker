@@ -13,7 +13,10 @@ from slack_sdk.errors import SlackApiError
 
 from src.session_data import SessionData  # For creating new sessions
 from src.session_store import ThreadSafeSessionStore
-from src.slack_bot.handlers import handle_feedback_modal_submission
+from src.slack_bot.handlers import (  # For opening the modal and building invitation message
+    handle_feedback_button_click,
+    handle_feedback_modal_submission,
+)
 from src.slack_bot.views import (  # For opening the modal and building invitation message
     build_invitation_message,
     open_feedback_modal,
@@ -502,6 +505,20 @@ def feedback_modal_submission_handler_wrapper(ack, body, client, view, logger):
         body=body,
         client=client,
         view=view,
+        logger=logger,
+        session_store=session_store,
+    )
+
+
+# Register action handler for "Provide Feedback" button
+@app.action("open_feedback_modal")
+def feedback_button_click_wrapper(
+    ack, body, client, logger
+):  # noqa: WPS110 – slack signature
+    handle_feedback_button_click(
+        ack=ack,
+        body=body,
+        client=client,
         logger=logger,
         session_store=session_store,
     )
