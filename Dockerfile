@@ -13,4 +13,4 @@ COPY src ./src
 ENV PYTHONPATH=/app
 
 # Run the application
-CMD ["python", "src/app.py"]
+CMD ["python", "-m", "src.main"]
