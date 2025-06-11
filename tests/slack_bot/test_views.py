@@ -3,7 +3,11 @@ from unittest.mock import Mock, patch
 
 from slack_sdk.errors import SlackApiError
 
-from src.slack_bot.views import get_feedback_modal_view, open_feedback_modal
+from src.slack_bot.views import (
+    build_invitation_message,
+    get_feedback_modal_view,
+    open_feedback_modal,
+)
 
 
 class TestViews(unittest.TestCase):
@@ -222,6 +226,20 @@ class TestViews(unittest.TestCase):
         mock_logger.error.assert_called_once_with(
             f"An unexpected error occurred while opening feedback modal for trigger_id {mock_trigger_id}: {test_exception}"
         )
+
+    # New tests for invitation message
+    def test_build_invitation_message(self):
+        session_id = "sess-123"
+        blocks = build_invitation_message(session_id)
+        # Ensure it returns list[dict]
+        assert isinstance(blocks, list)
+        assert all(isinstance(b, dict) for b in blocks)
+        # Check button value includes session id
+        button_block = next((b for b in blocks if b.get("type") == "actions"), None)
+        assert button_block is not None
+        button = button_block["elements"][0]
+        assert session_id in button["value"]
+        assert button["text"]["text"] == "Provide Feedback"
 
 
 if __name__ == "__main__":

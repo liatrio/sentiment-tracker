@@ -1,7 +1,9 @@
+import json
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from slack_sdk.errors import SlackApiError
+from slack_sdk.models.blocks import ActionsBlock, ButtonElement, SectionBlock
 from slack_sdk.web import WebClient
 
 logger = logging.getLogger(__name__)
@@ -124,6 +126,29 @@ def get_feedback_modal_view(session_id: str) -> Dict[str, Any]:
             },
         ],
     }
+
+
+def build_invitation_message(
+    session_id: str,
+) -> List[dict]:  # noqa: D401 – simple helper
+    """Return Block Kit JSON inviting user to provide feedback."""
+    button = ButtonElement(
+        text={"type": "plain_text", "text": "Provide Feedback"},
+        action_id="open_feedback_modal",
+        value=json.dumps({"session_id": session_id}),
+        style="primary",
+    )
+    blocks = [
+        SectionBlock(
+            text={
+                "type": "mrkdwn",
+                "text": "You have been invited to provide feedback. "
+                "Please click the button below:",
+            }
+        ),
+        ActionsBlock(elements=[button]),
+    ]
+    return [block.to_dict() for block in blocks]
 
 
 def open_feedback_modal(client: WebClient, trigger_id: str, session_id: str) -> None:

@@ -14,7 +14,10 @@ from slack_sdk.errors import SlackApiError
 from src.session_data import SessionData  # For creating new sessions
 from src.session_store import ThreadSafeSessionStore
 from src.slack_bot.handlers import handle_feedback_modal_submission
-from src.slack_bot.views import open_feedback_modal  # For opening the modal
+from src.slack_bot.views import (  # For opening the modal and building invitation message
+    build_invitation_message,
+    open_feedback_modal,
+)
 
 from .scheduler import Scheduler
 
@@ -356,6 +359,29 @@ def process_gather_feedback_request(
             time_limit_minutes=time_in_minutes,
         )
         session_store.add_session(new_session)
+
+        # DM each participant with invitation button
+        invite_blocks = build_invitation_message(session_id)
+        failures = 0
+        for target_user_id in member_user_ids:
+            try:
+                client.chat_postMessage(
+                    channel=target_user_id,
+                    text="You have been invited to provide feedback.",
+                    blocks=invite_blocks,
+                )
+                logger.info(
+                    "feedback_invitation_sent",
+                    extra={"session_id": session_id, "target_user_id": target_user_id},
+                )
+            except SlackApiError as exc:
+                failures += 1
+                logger.warning(
+                    "Failed to send feedback invitation to %s in session %s: %s",
+                    target_user_id,
+                    session_id,
+                    exc.response.get("error", str(exc)),
+                )
 
         # Schedule automatic session expiry
         delay_seconds = time_in_minutes * 60
