@@ -3,7 +3,7 @@ import logging
 import os
 import re
 import uuid  # For generating unique session IDs
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, Dict, Optional
 
 from dotenv import load_dotenv
@@ -356,6 +356,26 @@ def process_gather_feedback_request(
         )
 
 
+# ------------------------------------------------------------------
+# Thread helper utilities
+# ------------------------------------------------------------------
+
+
+def _log_future_exception(fut: Future) -> None:  # noqa: WPS430 – small util
+    """Logs any exception raised by a completed *Future*."""
+    exc = fut.exception()
+    if exc is not None:
+        logger.exception("Background task raised an exception: %s", exc, exc_info=exc)
+
+
+def submit_background(func, /, *args, **kwargs) -> Future:  # noqa: WPS110
+    """Submit *func* to the shared thread pool with automatic error logging."""
+
+    fut = executor.submit(func, *args, **kwargs)
+    fut.add_done_callback(_log_future_exception)
+    return fut
+
+
 @app.command("/gather-feedback")
 def handle_gather_feedback_command(
     ack: Ack,
@@ -368,7 +388,7 @@ def handle_gather_feedback_command(
     ack()
     try:
         # Submit the long-running task to the thread pool
-        executor.submit(
+        submit_background(
             process_gather_feedback_request,
             command=command,
             client=client,
