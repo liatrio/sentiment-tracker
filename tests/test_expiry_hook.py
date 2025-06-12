@@ -16,7 +16,13 @@ def test_expire_feedback_session(monkeypatch, session_present):
 
     # Mock session store
     mock_store = MagicMock()
-    mock_store.remove_session.return_value = object() if session_present else None
+    if session_present:
+        mock_session = MagicMock()
+        mock_session.feedback_items = []  # no feedback submitted
+        mock_session.channel_id = None
+        mock_store.remove_session.return_value = mock_session
+    else:
+        mock_store.remove_session.return_value = None
     monkeypatch.setattr(app, "session_store", mock_store)
 
     # Mock Slack client

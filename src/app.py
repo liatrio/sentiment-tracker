@@ -85,22 +85,54 @@ def _expire_feedback_session(
         if session is None:
             logger.debug("Expiry callback: session %s already removed", session_id)
             return
+
+        # Build partial report if any feedback exists
+        has_feedback = bool(session.feedback_items)
+
+        # Post report (or just DM) target channel decision
+        target_channel = session.channel_id or initiator_user_id
+
+        if has_feedback:
+            from src.reporting.aggregator import process_session  # local import
+            from src.reporting.render import post_report_to_slack  # local import
+
+            try:
+                processed = process_session(session)
+                post_report_to_slack(
+                    processed=processed,
+                    client=client,
+                    channel=target_channel,
+                )
+
+            except Exception as exc:
+                logger.error(
+                    "Failed to post partial report for expired session %s: %s",
+                    session_id,
+                    exc,
+                    exc_info=True,
+                )
+
         # Notify initiator that the session expired (best-effort)
         try:
+            note_extra = " Partial feedback report posted." if has_feedback else ""
             client.chat_postMessage(
                 channel=initiator_user_id,
                 text=(
-                    f"Your feedback session *{session_id}* has reached its time limit and is now closed.\n"
-                    "Thanks for using the feedback bot!"
+                    f"Your feedback session *{session_id}* has reached its time limit and is now closed.{note_extra}"
                 ),
             )
         except SlackApiError as exc:
             logger.warning(
                 "Failed to send expiry DM for session %s: %s",
                 session_id,
-                exc.response["error"],
+                exc.response.get("error"),
             )
-        logger.info("Session %s expired and removed after time limit.", session_id)
+
+        logger.info(
+            "Session %s expired and removed after time limit. feedback_items=%d",
+            session_id,
+            len(session.feedback_items),
+        )
     except Exception:  # pragma: no cover – ensure scheduler thread survives
         logger.exception("Error expiring session %s", session_id)
 

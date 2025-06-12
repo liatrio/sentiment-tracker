@@ -228,6 +228,9 @@ def handle_feedback_modal_submission(
                             session_id,
                         )
 
+                    # Mark session completed and remove from store to avoid expiry hook duplicates
+                    session_store.mark_done(session_id)
+
                     # DM initiator that processing finished
                     client.chat_postMessage(
                         channel=updated_session.initiator_user_id,
