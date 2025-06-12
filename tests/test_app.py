@@ -265,7 +265,7 @@ class TestProcessGatherFeedbackRequest:
         mock_logger.warning.assert_called_once()
 
     @patch("src.app.logger")
-    def test_general_exception(self, mock_logger):
+    def test_l_exception(self, mock_logger):
         """Test general exception handling during processing."""
         mock_respond = MagicMock()
         mock_client = MagicMock()

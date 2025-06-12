@@ -35,7 +35,7 @@ class TestViews(unittest.TestCase):
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": "Please share your anonymous feedback about the session. Your honest thoughts help us improve!",
+                        "text": "Please share your anonymous feedback. Your honest thoughts help us improve!",
                     },
                 },
                 {
@@ -246,6 +246,31 @@ class TestViews(unittest.TestCase):
         section_block = next((b for b in blocks if b.get("type") == "section"), None)
         assert f"<@{initiator_user_id}>" in section_block["text"]["text"]
         assert f"<#{channel_id}>" in section_block["text"]["text"]
+
+    def test_build_invitation_message_with_reason(self):
+        """Invitation message should include reason when provided."""
+        blocks = build_invitation_message(
+            session_id="sess42",
+            initiator_user_id="U123",
+            channel_id="C999",
+            reason="Quarterly review",
+        )
+        # First block is Section with intro text
+        intro_block = blocks[0]
+        self.assertEqual(intro_block["type"], "section")
+        intro_text = intro_block["text"]["text"]
+        self.assertIn("Quarterly review", intro_text)
+        self.assertIn("on *Quarterly review*", intro_text)
+
+    def test_get_feedback_modal_view_with_reason(self):
+        """Modal view should include context block with reason when provided."""
+        modal = get_feedback_modal_view(session_id="sess99", reason="Sprint retro")
+        # Look for context block type
+        context_blocks = [b for b in modal["blocks"] if b["type"] == "context"]
+        self.assertEqual(len(context_blocks), 1)
+        ctx_text = context_blocks[0]["elements"][0]["text"]
+        self.assertIn("Sprint retro", ctx_text)
+        self.assertTrue(ctx_text.startswith("*Feedback on:"))
 
 
 if __name__ == "__main__":

@@ -18,6 +18,7 @@ class SessionData:
         channel_id: str,  # Channel where the command was invoked or modal opened
         target_user_ids: List[str],  # List of users to collect feedback from
         time_limit_minutes: Optional[int] = None,  # Optional time limit in minutes
+        reason: Optional[str] = None,  # Optional reason for gathering feedback
     ):
         """
         Initializes a new session.
@@ -28,6 +29,7 @@ class SessionData:
             channel_id: The ID of the channel where the session was initiated.
             target_user_ids: A list of user IDs for whom feedback is being collected.
             time_limit_minutes: Optional duration in minutes for the feedback session.
+            reason: Optional reason for gathering feedback.
         """
         self.session_id: str = session_id
         self.initiator_user_id: str = initiator_user_id
@@ -46,6 +48,8 @@ class SessionData:
         self.last_accessed_at: datetime.datetime = self.created_at
         self._is_complete: bool = False
         self.anonymized_summary: Optional[str] = None
+        # Reason for feedback session (optional, shown in modal & report)
+        self.reason: Optional[str] = reason
         # These individual feedback fields might be more relevant for single-user sessions
         # or aggregated reports. For group sessions, individual feedback per target_user_id
         # might be stored differently (e.g., in a dictionary).
@@ -147,4 +151,6 @@ class SessionData:
                 if len(self.anonymized_summary) > 20
                 else f"anonymized_summary='{self.anonymized_summary}'"
             )
+        if self.reason:
+            parts.append(f"reason='{self.reason}'")
         return f"SessionData({', '.join(parts)})"

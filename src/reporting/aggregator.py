@@ -63,4 +63,5 @@ def process_session(
         all_items=all_items,
         sentiment_counts=sentiment_counts,
         stats=stats,
+        reason=session.reason,
     )

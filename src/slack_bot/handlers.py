@@ -81,7 +81,19 @@ def handle_feedback_button_click(  # noqa: WPS211 – acceptable arg count for h
         # Everything looks good – open / re-open the modal
         from src.slack_bot.views import open_feedback_modal  # local to avoid cycles
 
-        open_feedback_modal(client=client, trigger_id=trigger_id, session_id=session_id)
+        if session.reason is not None:
+            open_feedback_modal(
+                client=client,
+                trigger_id=trigger_id,
+                session_id=session_id,
+                reason=session.reason,
+            )
+        else:
+            open_feedback_modal(
+                client=client,
+                trigger_id=trigger_id,
+                session_id=session_id,
+            )
 
     except Exception as exc:  # pragma: no cover – catch-all to protect app thread
         logger.error("Error handling feedback button click: %s", exc, exc_info=True)

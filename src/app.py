@@ -266,9 +266,16 @@ def process_gather_feedback_request(
             f"Processing /gather-feedback from user '{user_id}' with text: '{command_text}'"
         )
 
-        # Regex to extract user group handle and optional time
+        # Matches:
+        #   from|for <@usergroup> [on <reason>] [for|in <minutes> minutes]
+        # The *reason* should capture everything after "on" up to the time
+        # portion (if present) **or** the end of the string.  We achieve this
+        # with a *look-ahead* that stops the match when we encounter the time
+        # segment or the end of the string.
         pattern = re.compile(
-            r"(?:from|for)\s+<!subteam\^([A-Z0-9]+)\|@([^>]+)>(?:\s+(?:for|in)\s+(-?\d+)\s+(?:minutes?|mins?))?",
+            r"(?:from|for)\s+<!subteam\^([A-Z0-9]+)\|@([^>]+)>"  # group ID + handle
+            r"(?:\s+on\s+(.*?)(?=\s+(?:for|in)\s+-?\d+\s+(?:minutes?|mins?)|$))?"  # reason (optional)
+            r"(?:\s+(?:for|in)\s+(-?\d+)\s+(?:minutes?|mins?))?",  # time (optional, allow negative for validation)
             re.IGNORECASE,
         )
         match = pattern.search(command_text)
@@ -281,8 +288,12 @@ def process_gather_feedback_request(
 
         user_group_id = match.group(1)
         user_group_handle = match.group(2)
-        time_in_minutes_str = match.group(3)
+        reason_raw = match.group(3)  # May be None
+        time_in_minutes_str = match.group(4)
         user_group_name_for_message = f"<!subteam^{user_group_id}|@{user_group_handle}>"
+
+        # Clean up reason (strip trailing/leading whitespace) if provided
+        reason = reason_raw.strip() if reason_raw else None
 
         # Validate and determine the session time
         time_in_minutes = 0
@@ -319,6 +330,10 @@ def process_gather_feedback_request(
         logger.info(
             f"Parsed for /gather-feedback from user '{user_id}': group_id='{user_group_id}', handle='{user_group_handle}', time: {time_in_minutes} minutes"
         )
+        if reason:
+            logger.info(
+                f"Parsed for /gather-feedback from user '{user_id}': reason='{reason}'"
+            )
 
         # Fetch user IDs from the user group
         try:
@@ -360,6 +375,7 @@ def process_gather_feedback_request(
             channel_id=channel_id,
             target_user_ids=member_user_ids,
             time_limit_minutes=time_in_minutes,
+            reason=reason,
         )
         session_store.add_session(new_session)
 
@@ -368,6 +384,7 @@ def process_gather_feedback_request(
             session_id=session_id,
             initiator_user_id=initiator_user_id,
             channel_id=channel_id,
+            reason=reason,
         )
         failures = 0
         for target_user_id in member_user_ids:

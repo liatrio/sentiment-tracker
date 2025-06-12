@@ -1,5 +1,7 @@
 *:memo: Feedback Report – Session {{ session_id }} ({{ date }})*
 
+{% if reason %}*Feedback on:* {{ reason }}{% endif %}
+
 *Participation*: {{ stats.submitted }}/{{ stats.total_participants }} responded{% if stats.low_participation %} – low participation :warning:{% endif %}
 
 *Sentiment*

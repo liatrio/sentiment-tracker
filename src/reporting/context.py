@@ -19,7 +19,7 @@ import os
 from dataclasses import asdict, dataclass, field
 from datetime import datetime as _dt
 from datetime import timezone as _tz
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from src.analysis.anonymize import anonymize_quotes
 from src.analysis.themes import extract_themes
@@ -82,6 +82,7 @@ class ReportContext:
 
     # Misc / versioning
     version: str = "1"
+    reason: Optional[str] = None
 
     # ------------------------------------------------------------------
     # Helpers
@@ -208,4 +209,5 @@ def build_report_context(processed: ProcessedFeedback) -> ReportContext:  # noqa
         all_items=anonymized_items,
         summary=summary,
         version=os.getenv("REPORT_VERSION", "0.1"),
+        reason=processed.reason,
     )

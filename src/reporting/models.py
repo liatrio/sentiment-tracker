@@ -16,6 +16,8 @@ class ProcessedFeedback:
     sentiment_counts: Dict[str, int]
     themes: List[str] = field(default_factory=list)
     stats: Dict[str, Any] = field(default_factory=dict)
+    # Optional reason / context for the feedback session
+    reason: str | None = None
 
     def participation_ratio(self) -> float:
         """Return fraction of participants who submitted (0‒1)."""
