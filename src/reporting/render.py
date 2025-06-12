@@ -1,17 +1,14 @@
 """Render feedback reports using Jinja2 templates."""
 from __future__ import annotations
 
-import datetime as _dt
 import logging
-import os
 from pathlib import Path
 from typing import List
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from src.analysis.anonymize import anonymize_quotes
-from src.analysis.themes import extract_themes
 from src.reporting.aggregator import ProcessedFeedback
+from src.reporting.context import build_report_context
 
 logger = logging.getLogger(__name__)
 
@@ -74,36 +71,11 @@ def _split_highlights(items: List[str], *, max_each: int = 5):
 def render_report(processed: ProcessedFeedback) -> str:
     """Render a Slack-friendly markdown report from ``ProcessedFeedback``."""
 
-    # Anonymize comments – swallow exceptions to guarantee report generation
-    try:
-        anon_items = anonymize_quotes(processed.all_items)
-    except Exception as exc:  # noqa: BLE001 – robustness
-        logger.warning("Anonymization failed, using raw quotes: %s", exc)
-        anon_items = processed.all_items
-
-    # Themes
-    try:
-        themes = extract_themes(anon_items)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("Theme extraction failed: %s", exc)
-        themes = []
-
-    bullets_well, bullets_improve = _split_highlights(anon_items)
+    # Build context (handles anonymization, themes, stats, etc.)
+    context = build_report_context(processed)
 
     template = _env.get_template("report.md.j2")
-    rendered: str = template.render(
-        session_id=processed.session_id,
-        date=_dt.datetime.utcnow().strftime("%Y-%m-%d"),
-        sentiment_counts=processed.sentiment_counts,
-        stats=processed.stats,
-        emoji_bar=_emoji_bar(processed.sentiment_counts),
-        themes=themes,
-        bullets_well=bullets_well,
-        bullets_improve=bullets_improve,
-        all_items=anon_items,
-        version=os.getenv("REPORT_VERSION", "0.1"),
-    )
-    return rendered
+    return template.render(**context.to_dict())
 
 
 def post_report_to_slack(

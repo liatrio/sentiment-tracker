@@ -31,9 +31,9 @@ def processed() -> ProcessedFeedback:
 
 def test_render_report_basic(processed: ProcessedFeedback):
     with patch(
-        "src.reporting.render.anonymize_quotes", side_effect=lambda x: x
+        "src.reporting.context.anonymize_quotes", side_effect=lambda x: x
     ) as anon_mp, patch(
-        "src.reporting.render.extract_themes", return_value=["communication"]
+        "src.reporting.context.extract_themes", return_value=["communication"]
     ) as theme_mp:
         out = render_report(processed)
 
