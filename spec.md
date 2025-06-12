@@ -44,6 +44,22 @@ The architecture should support future customization of questions.
   - Focus on improvements
 - **Low Response Handling**: Generate report anyway but note the low response rate
 
+#### 4.1 Report Configuration Knobs
+
+The report-generation pipeline exposes a small set of **environment-configurable knobs** that allow teams to tweak formatting without code changes.
+
+| Environment Variable | Description | Default |
+|----------------------|-------------|---------|
+| `REPORT_MAX_BULLETS_EACH` | Maximum bullet points shown for each *What went well* / *What could improve* section | `5` |
+| `REPORT_MAX_EMOJI_BAR` | Maximum number of emoji characters displayed in the sentiment bar | `20` |
+| `REPORT_MAX_THEMES` | Maximum number of themes listed | `5` |
+| `REPORT_MAX_COMMENTS` | Maximum anonymized quotes rendered verbatim | `50` |
+| `REPORT_LOW_PARTICIPATION_THRESHOLD` | Participation ratio below which the report shows the *low participation* warning | `0.5` |
+
+These variables are read at import-time by `src/reporting/config.py`.  If an environment value is absent or malformed, the defaults above are used.
+
+The runtime `ReportContext` dataclass encapsulates the fully prepared data set for the master Jinja2 template.  All new render targets (e.g. HTML or JSON) should consume this class to ensure consistent output.
+
 ## Technical Specifications
 
 ### 1. Architecture

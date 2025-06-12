@@ -177,45 +177,53 @@ def handle_feedback_modal_submission(
             )
             return
 
-        # Notify initiator if session complete (only after successful update)
+        # Notify initiator if session complete – heavy work must run off-thread
         if updated_session.is_complete:
-            # ------------------------------------------------------------------
-            # Aggregate feedback data now that collection is complete
-            # ------------------------------------------------------------------
-            try:
-                processed = session_store.process_feedback(session_id)
-                logger.info(
-                    "Aggregated feedback for %s: sentiments=%s, stats=%s",
-                    session_id,
-                    processed.sentiment_counts,
-                    processed.stats,
-                )
+            # Import here to avoid cyclic dependency at module load time
+            from src.app import submit_background  # local import – shared executor
 
-                # Post full report to the original channel (or DM initiator)
-                from src.reporting.render import post_report_to_slack  # local import
+            def _aggregate_and_post() -> None:  # noqa: WPS430 – nested helper
+                """Aggregate feedback and post report in a background thread."""
 
-                post_report_to_slack(
-                    processed=processed,
-                    client=client,
-                    channel=updated_session.channel_id,
-                )
-            except Exception as agg_exc:  # pragma: no cover – protect runtime
-                logger.error("Aggregation failed for %s: %s", session_id, agg_exc)
+                try:
+                    processed = session_store.process_feedback(session_id)
+                    logger.info(
+                        "Aggregated feedback for %s: sentiments=%s, stats=%s",
+                        session_id,
+                        processed.sentiment_counts,
+                        processed.stats,
+                    )
 
-            try:
-                client.chat_postMessage(
-                    channel=updated_session.initiator_user_id,
-                    text=(
-                        f"All participants have submitted feedback for session *{session_id}*. "
-                        "Processing complete. You'll receive the report shortly!"
-                    ),
-                )
-            except Exception as post_exc:  # noqa: WPS110
-                logger.warning(
-                    "Failed to notify initiator about completion of %s: %s",
-                    session_id,
-                    post_exc,
-                )
+                    # Post full report to the original channel (or DM initiator)
+                    from src.reporting.render import (  # local import – avoid cycles
+                        post_report_to_slack,
+                    )
+
+                    post_report_to_slack(
+                        processed=processed,
+                        client=client,
+                        channel=updated_session.channel_id,
+                    )
+
+                    # DM initiator that processing finished
+                    client.chat_postMessage(
+                        channel=updated_session.initiator_user_id,
+                        text=(
+                            f"All participants have submitted feedback for session *{session_id}*. "
+                            "Processing complete. You'll receive the report shortly!"
+                        ),
+                    )
+
+                except Exception as exc:  # pragma: no cover – fail silently but log
+                    logger.error(
+                        "Background aggregation failed for %s: %s",
+                        session_id,
+                        exc,
+                        exc_info=True,
+                    )
+
+            # Submit the background job to the shared executor
+            submit_background(_aggregate_and_post)
 
     except KeyError as e:
         logger.error(f"Error accessing key in view submission: {e}. View: {view}")

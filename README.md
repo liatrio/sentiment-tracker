@@ -34,6 +34,11 @@ A Slack bot designed to collect and analyze team sentiment through interactive f
 |----------|-------------|
 | `OPENAI_API_KEY` | Required for OpenAI integration |
 | `OPENAI_MODEL` | Optional. Defaults to `gpt-4.1` used by the helper |
+| `REPORT_MAX_BULLETS_EACH` | (int) Max bullet points per **well/improve** section in reports (default `5`) |
+| `REPORT_MAX_EMOJI_BAR` | (int) Max emoji characters shown in sentiment bar (default `20`) |
+| `REPORT_MAX_THEMES` | (int) Max number of themes listed (default `5`) |
+| `REPORT_MAX_COMMENTS` | (int) Max anonymized quotes rendered verbatim (default `50`) |
+| `REPORT_LOW_PARTICIPATION_THRESHOLD` | (float 0-1) Participation rate considered *low* (default `0.5`) |
 
 ## Running Locally
 
