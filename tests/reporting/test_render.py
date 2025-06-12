@@ -62,5 +62,5 @@ def test_post_report_long_upload(processed: ProcessedFeedback):
         client = MagicMock()
         post_report_to_slack(processed=processed, client=client, channel="C123")
 
-    client.files_upload.assert_called_once()
+    client.files_upload_v2.assert_called_once()
     client.chat_postMessage.assert_not_called()

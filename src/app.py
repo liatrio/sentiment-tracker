@@ -19,7 +19,6 @@ from src.slack_bot.handlers import (  # For opening the modal and building invit
 )
 from src.slack_bot.views import (  # For opening the modal and building invitation message
     build_invitation_message,
-    open_feedback_modal,
 )
 
 from .scheduler import Scheduler
@@ -165,91 +164,33 @@ def log_request(logger, body, next):
     return next()
 
 
-# Pattern matching for hello messages (case insensitive)
-@app.message(re.compile("hello", re.IGNORECASE))
-def message_hello(message, say):
-    # Say hello back
-    logger.info(
-        f"Received hello message from user {message['user']}"
-        f" in channel {message.get('channel')}"
+def _help_text() -> str:
+    """Return a rich help message describing bot purpose and usage."""
+
+    return (
+        "*Sentiment-Bot – Quick, Anonymous Team Feedback*\n\n"
+        "This bot helps teams gather candid sentiment and theme insights so you can act fast and continuously improve.\n\n"
+        "*How to use*:\n"
+        "• `@sentiment-bot help` — show this help message.\n"
+        "• `/gather-feedback from <@user-group> [on <topic>] [for <minutes> minutes]` — DM everyone in the user group a survey modal, collect their anonymous feedback, and post a summary back to the channel.\n\n"
+        "Examples:\n"
+        "• `/gather-feedback from @design` — ask the *design* group for feedback (default 10 min).\n"
+        "• `/gather-feedback for @frontend on Sprint 42 for 15 minutes` — ask *frontend* for feedback about *Sprint 42* for 15 min."
     )
-    say(f"Hey there <@{message['user']}>!")
 
 
-# Pattern matching for help messages (case insensitive)
-@app.message(re.compile("help", re.IGNORECASE))
-def message_help(message, say):
-    logger.info(
-        f"Received help request from user {message['user']}"
-        f" in channel {message.get('channel')}"
-    )
-    help_text = (
-        "*Available Commands:*\n"
-        "• Say `hello` to get a greeting\n"
-        "• Use `/ping` to check if I'm online\n"
-        "• Use `@botname help` to see this message again\n"
-        "• Try mentioning me with `@botname` to start a conversation"
-    )
-    say(help_text)
-
-
-# Example command handler
-@app.command("/ping")
-def command_ping(ack, respond):
-    # Acknowledge command request
-    ack()
-    logger.info("Received ping command")
-    # Respond to the command
-    respond("Pong! :table_tennis_paddle_and_ball:")
-
-
-@app.command("/test-feedback")
-def handle_test_feedback_command(ack, command, client, logger, respond):
-    """Handles the /test-feedback slash command to open the feedback modal."""
-    ack()
-    try:
-        user_id = command["user_id"]
-        channel_id = command.get(
-            "channel_id"
-        )  # Might be None if used in DMs with the bot
-        trigger_id = command["trigger_id"]
-
-        # Generate a session ID first as it's needed for the modal's private_metadata
-        session_id = str(uuid.uuid4())
-
-        # Open the modal as soon as possible with the trigger_id
-        open_feedback_modal(client=client, trigger_id=trigger_id, session_id=session_id)
-        logger.info(
-            f"Attempted to open feedback modal with session_id '{session_id}' for user '{user_id}'."
-        )
-
-        # Now, create and store the session data
-        new_session = SessionData(
-            session_id=session_id,
-            initiator_user_id=user_id,  # The user who invoked /test-feedback
-            channel_id=channel_id,
-            target_user_ids=[
-                user_id
-            ],  # For /test-feedback, the target is the initiator
-            time_limit_minutes=None,  # No specific time limit for /test-feedback by default
-        )
-        session_store.add_session(new_session)
-        logger.info(f"Created and stored session '{session_id}' for user '{user_id}'.")
-
-    except SlackApiError as e:
-        logger.error(
-            f"Error opening feedback modal for user '{user_id}': {e.response['error']}",
-            exc_info=True,
-        )
-        respond(
-            text="Sorry, something went wrong while trying to open the feedback form. Please try again."
-        )
-    except Exception as e:  # General fallback for other errors
-        logger.error(
-            f"Unexpected error in /test-feedback for user '{user_id}': {e}",
-            exc_info=True,
-        )
-        respond(text="Sorry, an unexpected error occurred. Please try again.")
+# 1. Catch any mention of the bot
+@app.event("app_mention")
+def handle_app_mention(event, say, logger: logging.Logger):
+    """
+    Respond to `@sentiment-bot help`.
+    Any other mention is ignored (or you can add more logic below).
+    """
+    text = event.get("text", "").lower()
+    if "help" in text:
+        say(_help_text())
+    else:
+        logger.debug("Ignoring mention without help: %s", text)
 
 
 def process_gather_feedback_request(
@@ -498,13 +439,6 @@ def handle_gather_feedback_command(
             exc_info=True,
         )
         respond("Sorry, there was an issue submitting your request. Please try again.")
-
-
-# Example app mention handler
-@app.event("app_mention")
-def handle_app_mention(event, say):
-    logger.info(f"Bot was mentioned by user {event['user']}")
-    say(f"You mentioned me, <@{event['user']}>! How can I help?")
 
 
 # Error handler

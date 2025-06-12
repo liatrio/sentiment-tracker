@@ -90,11 +90,10 @@ def post_report_to_slack(
     if len(report_text) < 2800:
         client.chat_postMessage(channel=channel, text=report_text)
     else:
-        # Upload as a file if too long
-        client.files_upload(
+        # Upload as a file if too long using the modern Slack endpoint
+        client.files_upload_v2(
             channels=channel,
             title=f"Feedback Report {processed.session_id}",
             content=report_text,
             filename=f"feedback_{processed.session_id}.md",
-            filetype="markdown",
         )

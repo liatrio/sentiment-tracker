@@ -1,17 +1,13 @@
 # tests/test_app.py
 import os
-from unittest.mock import ANY, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 from src.app import process_gather_feedback_request  # Import the worker function
 from src.app import (
-    command_ping,
     custom_error_handler,
     handle_app_mention,
     handle_gather_feedback_command,
-    handle_test_feedback_command,
     log_request,
-    message_hello,
-    message_help,
 )
 from src.session_data import SessionData
 
@@ -19,57 +15,16 @@ from src.session_data import SessionData
 
 
 @patch("src.app.logger")
-def test_message_hello_handler(mock_logger):
-    """Test that the message_hello handler responds correctly."""
-    mock_say = MagicMock()
-    mock_message = {"user": "U123ABC", "channel": "C456DEF", "text": "hello"}
-    message_hello(message=mock_message, say=mock_say)
-    mock_say.assert_called_once_with("Hey there <@U123ABC>!")
-    mock_logger.info.assert_called_once_with(
-        "Received hello message from user U123ABC in channel C456DEF"
-    )
-
-
-@patch("src.app.logger")
-def test_message_help_handler(mock_logger):
-    """Test that the message_help handler responds with help text."""
-    mock_say = MagicMock()
-    mock_message = {"user": "U123XYZ", "channel": "C456PQR", "text": "help"}
-    expected_help_text = (
-        "*Available Commands:*\n"
-        "• Say `hello` to get a greeting\n"
-        "• Use `/ping` to check if I'm online\n"
-        "• Use `@botname help` to see this message again\n"
-        "• Try mentioning me with `@botname` to start a conversation"
-    )
-    message_help(message=mock_message, say=mock_say)
-    mock_say.assert_called_once_with(expected_help_text)
-    mock_logger.info.assert_called_once_with(
-        "Received help request from user U123XYZ in channel C456PQR"
-    )
-
-
-@patch("src.app.logger")
-def test_command_ping_handler(mock_logger):
-    """Test that the command_ping handler acknowledges and responds."""
-    mock_ack = MagicMock()
-    mock_respond = MagicMock()
-    command_ping(ack=mock_ack, respond=mock_respond)
-    mock_ack.assert_called_once()
-    mock_respond.assert_called_once_with("Pong! :table_tennis_paddle_and_ball:")
-    mock_logger.info.assert_called_once_with("Received ping command")
-
-
-@patch("src.app.logger")
 def test_handle_app_mention_handler(mock_logger):
     """Test that the handle_app_mention handler responds correctly."""
     mock_say = MagicMock()
-    mock_event = {"user": "UAPPMENTION", "text": "@bot"}
-    handle_app_mention(event=mock_event, say=mock_say)
-    mock_say.assert_called_once_with(
-        "You mentioned me, <@UAPPMENTION>! How can I help?"
-    )
-    mock_logger.info.assert_called_once_with("Bot was mentioned by user UAPPMENTION")
+    mock_event = {"user": "UAPPMENTION", "text": "@bot help"}
+    handle_app_mention(event=mock_event, say=mock_say, logger=mock_logger)
+    from src.app import _help_text
+
+    mock_say.assert_called_once_with(_help_text())
+    # help branch should not invoke debug logging
+    mock_logger.debug.assert_not_called()
 
 
 @patch("src.app.logger")
@@ -332,84 +287,3 @@ def test_shutdown_executor_registered(mock_register):
     importlib.reload(src.app)
 
     mock_register.assert_called_once_with(src.app.shutdown_executor)
-
-
-# --- Tests for /test-feedback Command (No Change) --- #
-
-
-@patch("src.app.uuid.uuid4")
-@patch("src.app.open_feedback_modal")
-@patch("src.app.session_store")
-@patch("src.app.logger")
-def test_handle_test_feedback_command_success(
-    mock_logger,
-    mock_session_store,
-    mock_open_feedback_modal,
-    mock_uuid4,
-):
-    """Test successful execution of the /test-feedback command."""
-    mock_ack = MagicMock()
-    mock_client = MagicMock()
-    mock_respond = MagicMock()
-    mock_command_payload = {
-        "user_id": "U_TEST_USER",
-        "channel_id": "C_TEST_CHANNEL",
-        "trigger_id": "T_TEST_TRIGGER",
-    }
-    test_session_id = "fake-uuid-1234"
-    mock_uuid4.return_value = test_session_id
-
-    handle_test_feedback_command(
-        ack=mock_ack,
-        command=mock_command_payload,
-        client=mock_client,
-        logger=mock_logger,
-        respond=mock_respond,
-    )
-
-    mock_ack.assert_called_once()
-    mock_open_feedback_modal.assert_called_once_with(
-        client=mock_client,
-        trigger_id="T_TEST_TRIGGER",
-        session_id=test_session_id,
-    )
-    mock_session_store.add_session.assert_called_once_with(ANY)
-    added_session_arg = mock_session_store.add_session.call_args[0][0]
-    assert isinstance(added_session_arg, SessionData)
-    assert added_session_arg.session_id == test_session_id
-
-
-@patch("src.app.uuid.uuid4")
-@patch("src.app.open_feedback_modal")
-@patch("src.app.session_store")
-@patch("src.app.logger")
-def test_handle_test_feedback_command_exception(
-    mock_logger,
-    mock_session_store,
-    mock_open_feedback_modal,
-    mock_uuid4,
-):
-    """Test error handling in the /test-feedback command."""
-    mock_ack = MagicMock()
-    mock_client = MagicMock()
-    mock_respond = MagicMock()
-    mock_command_payload = {"user_id": "U_TEST_USER_EXC", "trigger_id": "T_TRIGGER"}
-    test_exception = Exception("Something broke")
-    mock_session_store.add_session.side_effect = test_exception
-
-    handle_test_feedback_command(
-        ack=mock_ack,
-        command=mock_command_payload,
-        client=mock_client,
-        logger=mock_logger,
-        respond=mock_respond,
-    )
-
-    mock_ack.assert_called_once()
-    mock_logger.error.assert_called_once_with(
-        f"Unexpected error in /test-feedback for user 'U_TEST_USER_EXC': {test_exception}",
-        exc_info=True,
-    )
-    mock_respond.assert_called_once_with(
-        text="Sorry, an unexpected error occurred. Please try again."
-    )
