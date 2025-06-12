@@ -1,7 +1,7 @@
 """Unit tests for report rendering and Slack posting helpers."""
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 
@@ -52,8 +52,15 @@ def test_post_report_short_message(processed: ProcessedFeedback):
         post_report_to_slack(processed=processed, client=client, channel="C123")
 
     render_mp.assert_called_once()
-    client.chat_postMessage.assert_called_once_with(channel="C123", text="short")
-    client.files_upload.assert_not_called()
+
+    # Two calls: parent + threaded report
+    client.chat_postMessage.assert_any_call(
+        channel="C123", text="*Sentiment Report for sess1*"
+    )
+    client.chat_postMessage.assert_any_call(channel="C123", text="short", thread_ts=ANY)
+    assert client.chat_postMessage.call_count == 2
+
+    client.files_upload_v2.assert_not_called()
 
 
 def test_post_report_long_upload(processed: ProcessedFeedback):
@@ -63,4 +70,6 @@ def test_post_report_long_upload(processed: ProcessedFeedback):
         post_report_to_slack(processed=processed, client=client, channel="C123")
 
     client.files_upload_v2.assert_called_once()
-    client.chat_postMessage.assert_not_called()
+    client.chat_postMessage.assert_called_once_with(
+        channel="C123", text="*Sentiment Report for sess1*"
+    )

@@ -85,10 +85,29 @@ def post_report_to_slack(
 ):  # pragma: no cover
     """Send report to Slack *channel* using *client* (WebClient)."""
 
+    # ------------------------------------------------------------------
+    # 1. Post parent message
+    # ------------------------------------------------------------------
+
+    title_part = f"'{processed.reason}'" if processed.reason else processed.session_id
+    parent_resp = client.chat_postMessage(
+        channel=channel,
+        text=f"*Sentiment Report for {title_part}*",
+    )
+
+    parent_ts = parent_resp["ts"]
     report_text = render_report(processed)
 
+    # ------------------------------------------------------------------
+    # 2. Post threaded report (message or file)
+    # ------------------------------------------------------------------
+
     if len(report_text) < 2800:
-        client.chat_postMessage(channel=channel, text=report_text)
+        client.chat_postMessage(
+            channel=channel,
+            text=report_text,
+            thread_ts=parent_ts,
+        )
     else:
         # Upload as a file if too long using the modern Slack endpoint
         client.files_upload_v2(
@@ -96,4 +115,5 @@ def post_report_to_slack(
             title=f"Feedback Report {processed.session_id}",
             content=report_text,
             filename=f"feedback_{processed.session_id}.md",
+            thread_ts=parent_ts,
         )
