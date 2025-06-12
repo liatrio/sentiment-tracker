@@ -199,11 +199,22 @@ def handle_feedback_modal_submission(
                         post_report_to_slack,
                     )
 
+                    target_channel = (
+                        updated_session.channel_id or updated_session.initiator_user_id
+                    )
+
                     post_report_to_slack(
                         processed=processed,
                         client=client,
-                        channel=updated_session.channel_id,
+                        channel=target_channel,
                     )
+
+                    # If we had to fall back to DM, log for observability
+                    if updated_session.channel_id is None:
+                        logger.info(
+                            "Report for %s posted via DM to initiator (no channel_id)",
+                            session_id,
+                        )
 
                     # DM initiator that processing finished
                     client.chat_postMessage(

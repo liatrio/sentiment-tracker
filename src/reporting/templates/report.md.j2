@@ -6,17 +6,20 @@
 {{ emoji_bar }}
 Positive {{ sentiment_counts.get('positive', 0) }} | Neutral {{ sentiment_counts.get('neutral', 0) }} | Negative {{ sentiment_counts.get('negative', 0) }}
 
+{% if summary %}*Summary*
+{{ summary }}
+{% endif %}
+
 {% if themes %}*Top Themes*
 {% for theme in themes %}• {{ theme }}
 {% endfor %}
 {% endif %}
 
-*Highlights*
-• *What went well*
+*What went well highlights*
 {% for item in bullets_well %}{{ item }}
 {% endfor %}
 
-• *What could improve*
+*What could improve highlights*
 {% for item in bullets_improve %}{{ item }}
 {% endfor %}
 

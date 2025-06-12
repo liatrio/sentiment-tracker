@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 from typing import List
 
-from jinja2 import Environment, FileSystemLoader, select_autoescape
+from jinja2 import Environment, FileSystemLoader
 
 from src.reporting.aggregator import ProcessedFeedback
 from src.reporting.context import build_report_context
@@ -14,9 +14,11 @@ logger = logging.getLogger(__name__)
 
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
 
+# Markdown/slack templates don’t need HTML escaping – it breaks apostrophes etc.
+# Disable autoescape to preserve original characters.
 _env = Environment(
     loader=FileSystemLoader(str(_TEMPLATE_DIR)),
-    autoescape=select_autoescape(enabled_extensions=(".j2",)),
+    autoescape=False,
     trim_blocks=True,
     lstrip_blocks=True,
 )

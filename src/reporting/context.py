@@ -31,6 +31,17 @@ __all__ = [
     "ReportContext",
 ]
 
+# Optional: summary generation using OpenAI; fail gracefully if unavailable
+try:
+    from src.analysis.summary import generate_summary  # type: ignore
+
+except Exception:  # pragma: no cover – optional dependency
+
+    def generate_summary(*_args, **_kwargs):  # type: ignore  # noqa: D401,E501 – placeholder
+        """Fallback summary generator if OpenAI is not configured."""
+
+        return ""
+
 
 @dataclass(slots=True)
 class Stats:
@@ -62,6 +73,9 @@ class ReportContext:
     themes: List[str] = field(default_factory=list)
     bullets_well: List[str] = field(default_factory=list)
     bullets_improve: List[str] = field(default_factory=list)
+
+    # Textual summary paragraph
+    summary: str = ""
 
     # Raw anonymized comments (full list)
     all_items: List[str] = field(default_factory=list)
@@ -137,25 +151,43 @@ def build_report_context(processed: ProcessedFeedback) -> ReportContext:  # noqa
     # Pre-processing – anonymize & analyse
     # ------------------------------------------------------------------
     try:
-        anonymized_items = anonymize_quotes(processed.all_items)
-    except Exception as exc:  # noqa: BLE001 – robustness
-        # Log via root logger; keep import local to avoid circular
-        logging.getLogger(__name__).warning("Anonymization failed: %s", exc)
-        anonymized_items = processed.all_items
+        # Extract highlights *before* anonymization so marker keywords survive
+        raw_bullets_well, raw_bullets_improve = _split_highlights(
+            processed.all_items, max_each=config.MAX_BULLETS_EACH
+        )
+
+        # Clean bullet texts (drop leading bullet prefix) and anonymize **once**
+        clean_bullet_texts = [
+            b.lstrip("• ").strip() for b in raw_bullets_well + raw_bullets_improve
+        ]
+        anonymized_bullets = anonymize_quotes(clean_bullet_texts)
+
+        # Split back into well / improve lists preserving original ordering
+        split_index = len(raw_bullets_well)
+        bullets_well = [f"• {txt}" for txt in anonymized_bullets[:split_index]]
+        bullets_improve = [f"• {txt}" for txt in anonymized_bullets[split_index:]]
+
+        # The anonymized comments block shows the same texts without prefix
+        anonymized_items = anonymized_bullets
+
+        themes = extract_themes(anonymized_items)[: config.MAX_THEMES]
+
+        # Generate summary paragraph (may fail silently)
+        try:
+            summary = generate_summary(anonymized_items, themes)
+        except Exception:  # pragma: no cover – summary optional
+            summary = ""
+
+    except Exception as exc:  # pragma: no cover – analysis failures should not block
+        logger = logging.getLogger(__name__)
+        logger.warning("Analysis failed for session %s: %s", processed.session_id, exc)
+        anonymized_items = list(processed.all_items)
+        themes = []
+        bullets_well, bullets_improve = [], []
+        summary = ""
 
     # Cap comments to avoid overly long Slack messages
     anonymized_items = anonymized_items[: config.MAX_COMMENTS]
-
-    try:
-        themes = extract_themes(anonymized_items)[: config.MAX_THEMES]
-    except Exception as exc:  # noqa: BLE001
-        logging.getLogger(__name__).warning("Theme extraction failed: %s", exc)
-        themes = []
-
-    # Highlights
-    bullets_well, bullets_improve = _split_highlights(
-        anonymized_items, max_each=config.MAX_BULLETS_EACH
-    )
 
     # Participation stats packaging
     stats = Stats(
@@ -174,5 +206,6 @@ def build_report_context(processed: ProcessedFeedback) -> ReportContext:  # noqa
         bullets_well=bullets_well,
         bullets_improve=bullets_improve,
         all_items=anonymized_items,
+        summary=summary,
         version=os.getenv("REPORT_VERSION", "0.1"),
     )
