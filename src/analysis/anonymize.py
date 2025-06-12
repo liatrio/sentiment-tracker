@@ -2,10 +2,14 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from typing import List
 
 from src.openai_client import chat_completion
+
+# Module logger
+logger = logging.getLogger(__name__)
 
 # Capture first JSON array (themes logic reused)
 _ARRAY_RE = re.compile(r"\[[^\]]*\]")
@@ -53,6 +57,10 @@ def anonymize_quotes(quotes: List[str], *, temperature: float = 0.3) -> List[str
             if len(rewritten) != len(batch):
                 raise ValueError("Length mismatch")
             out.extend(rewritten)
-        except Exception:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
+            # Log the root cause so we can debug why anonymization failed but continue gracefully.
+            logger.warning(
+                "Quote anonymization failed for batch: %s", exc, exc_info=True
+            )
             out.extend([f"[unredacted] {q}" for q in batch])
     return out
