@@ -1,0 +1,52 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  id-token: write
+  packages: write
+
+jobs:
+  tag-release:
+    name: tag-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Calculate release version
+        id: calculate_new_version
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          dry_run: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Kustomize Set Image
+        run: |
+          (
+            cd manifests;
+            IMAGE=ghcr.io/${{ github.repository }}:${{ steps.calculate_new_version.outputs.new_tag }} ;
+            kustomize edit set image $IMAGE
+          )
+
+      - name: Commit the updated manifests
+        id: update-manifest
+        run: |
+          git config --global user.name '${{ github.actor }}'
+          git config --global user.email '${{ github.actor }}@users.noreply.github.com'
+          git commit -am "chore: bump image to ${{ needs.calculate_new_version.outputs.new_tag }} in manifests"
+          git push
+          echo "new_sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Tag release
+        id: push_tag
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          custom_tag: ${{ steps.calculate_new_version.outputs.new_tag }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          commit_sha: ${{ steps.update-manifest.outputs.new_sha }}
+    
