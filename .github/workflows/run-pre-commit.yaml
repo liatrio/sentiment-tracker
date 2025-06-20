@@ -28,4 +28,14 @@ jobs:
           echo "SLACK_BOT_TOKEN=xoxb-test-token" >> .env
           echo "SLACK_SIGNING_SECRET=test-signing-secret" >> .env
           echo "OPENAI_API_KEY=test-key" >> .env
+          echo "SLACK_BOLT_TEST_MODE=1" >> .env
+          echo "SLACK_BOLT_TOKEN_VERIFICATION_ENABLED=false" >> .env
+          echo "SLACK_SDK_TEST_MODE=1" >> .env
       - uses: pre-commit/action@v3.0.1
+        env:
+          SLACK_BOT_TOKEN: "xoxb-test-token"
+          SLACK_SIGNING_SECRET: "test-signing-secret"
+          OPENAI_API_KEY: "test-key"
+          SLACK_BOLT_TEST_MODE: "1"
+          SLACK_BOLT_TOKEN_VERIFICATION_ENABLED: "false"
+          SLACK_SDK_TEST_MODE: "1"
