@@ -201,13 +201,15 @@ def _help_text() -> str:
 
     return (
         "*Sentiment-Bot – Quick, Anonymous Team Feedback*\n\n"
-        "This bot helps teams gather candid sentiment and theme insights so you can act fast and continuously improve.\n\n"
-        "*How to use*:\n"
-        "• `@sentiment-bot help` — show this help message.\n"
-        "• `/gather-feedback from <@user-group> [on <topic>] [for <minutes> minutes]` — DM everyone in the user group a survey modal, collect their anonymous feedback, and post a summary back to the channel.\n\n"
-        "Examples:\n"
-        "• `/gather-feedback from @design` — ask the *design* group for feedback (default 10 min).\n"
-        "• `/gather-feedback for @frontend on Sprint 42 for 15 minutes` — ask *frontend* for feedback about *Sprint 42* for 15 min."
+        "This bot lets you collect short, candid feedback and see an anonymised summary in minutes.\n\n"
+        "*Core commands*\n"
+        "• `@sentiment-bot help` — show this message.\n"
+        "• `/gather-feedback from <@user-group> [on <topic>] [for <minutes> minutes|mins?]` — DM **only** members of the given user-group.\n"
+        "• `/gather-feedback on <topic> [for <minutes> minutes|mins?]` — DM **everyone in the current channel**.\n\n"
+        "*Examples*\n"
+        "• `/gather-feedback from @design` — ask @design for feedback (defaults to 5 min).\n"
+        "• `/gather-feedback on last week’s retro` — poll the whole channel about last week’s retro (5 min).\n"
+        "• `/gather-feedback from @frontend on sprint 42 for 15 minutes` — target @frontend, topic *sprint 42*, 15 min window.\n"
     )
 
 
@@ -254,8 +256,142 @@ def process_gather_feedback_request(
         match = pattern.search(command_text)
 
         if not match:
+            # ------------------------------------------------------------------
+            # Fallback: gather feedback from the *whole channel*.
+            # Expected syntax:
+            #   on <reason> [for|in <minutes> minutes]
+            # The leading "on" is required to avoid ambiguity with future
+            # extensions, but we accept it being omitted to keep UX smooth.
+            # ------------------------------------------------------------------
+            channel_pattern = re.compile(
+                r"(?:on\s+)?(.*?)(?:\s+(?:for|in)\s+(-?\d+)\s+(?:minutes?|mins?))?$",
+                re.IGNORECASE,
+            )
+            ch_match = channel_pattern.search(command_text)
+            if not ch_match:
+                respond(
+                    "I'm sorry, I didn't understand that. Use either `/gather-feedback from @user-group [for X min]` "
+                    "or `/gather-feedback on <reason> [for X min]`"
+                )
+                return
+
+            reason_raw = ch_match.group(1)
+            time_in_minutes_str = ch_match.group(2)
+            reason = reason_raw.strip() if reason_raw else None
+
+            # Validate time (reuse logic)
+            time_in_minutes = 0
+            if time_in_minutes_str:
+                try:
+                    time_in_minutes = int(time_in_minutes_str)
+                    if time_in_minutes <= 0:
+                        logger.warning(
+                            f"Invalid time '{time_in_minutes_str}' for /gather-feedback by user '{user_id}'. Time must be positive."
+                        )
+                        respond("The time must be a positive number of minutes.")
+                        return
+                except ValueError:
+                    logger.warning(
+                        f"Invalid time format '{time_in_minutes_str}' for /gather-feedback by user '{user_id}'."
+                    )
+                    respond("Oops! The time specified must be a valid number.")
+                    return
+            else:
+                default_session_minutes_str = os.environ.get(
+                    "DEFAULT_SESSION_MINUTES", "5"
+                )
+                try:
+                    time_in_minutes = int(default_session_minutes_str)
+                    if time_in_minutes <= 0:
+                        logger.error(
+                            f"Invalid DEFAULT_SESSION_MINUTES '{default_session_minutes_str}'. Falling back to 5."
+                        )
+                        time_in_minutes = 5
+                except (ValueError, TypeError):
+                    logger.error(
+                        f"Invalid DEFAULT_SESSION_MINUTES '{default_session_minutes_str}'. Falling back to 5 minutes."
+                    )
+                    time_in_minutes = 5
+
+            channel_id = command.get("channel_id")
+            try:
+                from src.slack_bot.utils import get_channel_members
+
+                member_user_ids = get_channel_members(client, channel_id)
+                if not member_user_ids:
+                    respond(
+                        "I couldn't find any active members in this channel to invite."
+                    )
+                    return
+            except SlackApiError as exc:
+                logger.error(
+                    "Failed to fetch channel members for %s: %s",
+                    channel_id,
+                    exc,
+                    exc_info=True,
+                )
+                respond(
+                    "Sorry, I wasn't able to fetch channel members. Please try again later."
+                )
+                return
+
+            # Reuse common session creation logic.
+            session_id = str(uuid.uuid4())
+            initiator_user_id = user_id
+
+            new_session = SessionData(
+                session_id=session_id,
+                initiator_user_id=initiator_user_id,
+                channel_id=channel_id,
+                target_user_ids=member_user_ids,
+                time_limit_minutes=time_in_minutes,
+                reason=reason,
+            )
+            session_store.add_session(new_session)
+
+            invite_blocks = build_invitation_message(
+                session_id=session_id,
+                initiator_user_id=initiator_user_id,
+                channel_id=channel_id,
+                reason=reason,
+            )
+            failures = 0
+            for target_user_id in member_user_ids:
+                try:
+                    client.chat_postMessage(
+                        channel=target_user_id,
+                        text="You have been invited to provide feedback.",
+                        blocks=invite_blocks,
+                    )
+                except SlackApiError as exc:
+                    failures += 1
+                    logger.warning(
+                        "Failed to send feedback invitation to %s in session %s: %s",
+                        target_user_id,
+                        session_id,
+                        exc.response.get("error", str(exc)),
+                    )
+
+            # Schedule expiry & reminders
+            delay_seconds = time_in_minutes * 60
+            scheduler.schedule(
+                delay_seconds,
+                _expire_feedback_session,
+                session_id,
+                initiator_user_id,
+                client,
+            )
+            if delay_seconds > 60:
+                scheduler.schedule(
+                    delay_seconds - 60,
+                    _send_pending_reminder,
+                    session_id,
+                    client,
+                )
+
             respond(
-                "I'm sorry, I didn't understand that. Please use the format: `/gather-feedback from @user-group [for X min]`"
+                f"Okay, I've initiated a feedback session (ID: {session_id}) with {len(member_user_ids)} participant(s) "
+                f"for {time_in_minutes} minutes. I'll reach out to them shortly."
             )
             return
 
