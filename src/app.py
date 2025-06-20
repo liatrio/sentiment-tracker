@@ -34,10 +34,18 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Initialize the app with the bot token and enable message listening
+# Determine if token verification should be disabled (useful for CI/test mode)
+_token_verification_enabled_env = os.getenv(
+    "SLACK_BOLT_TOKEN_VERIFICATION_ENABLED", "true"
+).lower()
+# Treat any value other than explicit "false" (case-insensitive) as truthy
+_token_verification_enabled = _token_verification_enabled_env != "false"
+
 app = App(
     token=os.environ.get("SLACK_BOT_TOKEN"),
     # Process all messages, not just those that mention the bot
     process_before_response=True,
+    token_verification_enabled=_token_verification_enabled,
 )
 
 
