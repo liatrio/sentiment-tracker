@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: slackbot
-          image: ghcr.io/jburns24/53one # Tag gets set in CI workflow file: .github/workflows/build-push.yamlh
+          image: ghcr.io/liatrio/sentiment-tracker # Tag gets set in CI workflow file: .github/workflows/build-push.yamlh
           resources:
             requests:
               cpu: "100m"
