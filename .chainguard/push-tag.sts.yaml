@@ -1,0 +1,8 @@
+issuer: https://token.actions.githubusercontent.com
+subject_pattern: repo:liatrio/sentiment-tracker:*
+claim_pattern:
+  workflow_ref: liatrio/sentiment-tracker/.github/workflows/semantic-release.yaml@.* # Still not sure what needs to come after the actual workflow name but this works
+
+permissions:  
+  contents: write
+  packages: write

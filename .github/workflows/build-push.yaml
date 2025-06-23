@@ -6,20 +6,31 @@ on:
       - "v*.*.*"
 
 permissions:
-  packages: write
   contents: read
+  id-token: write
 
 jobs:
   docker:
     runs-on: ubuntu-latest
     steps:
+      - uses: octo-sts/action@6177b4481c00308b3839969c3eca88c96a91775f # v1.0.0
+        id: octo-sts
+        with:
+          scope: liatrio/sentiment-tracker # Where to look for the trust policy <org>/<repo> (octo-sts must be installed on this repo)
+          identity: push-tag # prefix of the trust policy expected to be at <scope>/.github/chainguard/<identity>.sts.yaml
+
+      # Only needed if your library is private
+      - run: |
+          git config --global url."https://git:${GH_TOKEN}@github.com".insteadOf "https://github.com"
+        env:
+          GH_TOKEN: ${{ steps.octo-sts.outputs.token }}
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v5
         with:
           # list of Docker images to use as base name for tags
           images: |
-            ghcr.io/jburns24/53one
+            ghcr.io/${{ github.repository }}
           # generate Docker tags based on the following events/attributes
           tags: |
             type=ref,event=tag
@@ -33,7 +44,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ steps.octo-sts.outputs.token }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
