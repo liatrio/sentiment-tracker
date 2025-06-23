@@ -9,7 +9,6 @@ on:
 permissions:
   contents: write
   id-token: write
-  packages: write
 
 jobs:
   tag-release:
@@ -40,16 +39,23 @@ jobs:
       #       IMAGE=ghcr.io/${{ github.repository }}:${{ steps.calculate_new_version.outputs.new_tag }} ;
       #       kustomize edit set image $IMAGE
       #     )
-
+      - uses: octo-sts/action@6177b4481c00308b3839969c3eca88c96a91775f # v1.0.0
+        id: octo-sts
+        with:
+          scope: liatrio/sentiment-tracker # Where to look for the trust policy <org>/<repo> (octo-sts must be installed on this repo)
+          identity: push-tag # prefix of the trust policy expected to be at <scope>/.github/chainguard/<identity>.sts.yaml
 
       - name: Commit the updated manifests
         id: update-manifest
         run: |
           git config --global user.name '${{ github.actor }}'
           git config --global user.email '${{ github.actor }}@users.noreply.github.com'
+          git config --global url."https://git:${GH_TOKEN}@github.com".insteadOf "https://github.com"
           git commit -am "chore: bump image to ${{ needs.calculate_new_version.outputs.new_tag }} in manifests"
           git push
           echo "new_sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ steps.octo-sts.outputs.token }}
 
       - name: Tag release
         id: push_tag
