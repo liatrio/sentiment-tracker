@@ -25,13 +25,22 @@ jobs:
           dry_run: true
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Kustomize Set Image
+      - name: Kustomize Set Image - DEV
         run: |
           (
-            cd manifests;
+            cd manifests/overlays/dev;
             IMAGE=ghcr.io/${{ github.repository }}:${{ steps.calculate_new_version.outputs.new_tag }} ;
-            kustomize edit set image $IMAGE
+            kustommize edit set iage $IMAGE
           )
+
+      # - name: Kustomize Set Image - PROD
+      #   run: |
+      #     (
+      #       cd manifests/overlays/prod;
+      #       IMAGE=ghcr.io/${{ github.repository }}:${{ steps.calculate_new_version.outputs.new_tag }} ;
+      #       kustomize edit set image $IMAGE
+      #     )
+
 
       - name: Commit the updated manifests
         id: update-manifest
@@ -49,4 +58,3 @@ jobs:
           custom_tag: ${{ steps.calculate_new_version.outputs.new_tag }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           commit_sha: ${{ steps.update-manifest.outputs.new_sha }}
-    
