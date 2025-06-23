@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: slackbot
+  labels:
+    app: slackbot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: slackbot
+  template:
+    metadata:
+      labels:
+        app: slackbot
+    spec:
+      containers:
+        - name: slackbot
+          image: ghcr.io/jburns24/53one # Tag gets set in CI workflow file: .github/workflows/build-push.yamlh
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
