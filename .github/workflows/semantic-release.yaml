@@ -30,7 +30,7 @@ jobs:
           (
             cd manifests/overlays/dev;
             IMAGE=ghcr.io/${{ github.repository }}:${{ steps.calculate_new_version.outputs.new_tag }} ;
-            kustommize edit set iage $IMAGE
+            kustomize edit set iage $IMAGE
           )
 
       # - name: Kustomize Set Image - PROD
