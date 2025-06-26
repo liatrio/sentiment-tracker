@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - deployment.yaml
+  - external-secrets.yaml
+
+configMapGenerator:
+  - name: argocd-github-notifications
+    literals:
+      - notifications=app-deploy-success,app-deploy-failed
+    options:
+      disableNameSuffixHash: true
+      labels:
+        liatr.io/notifications: ghwebhook

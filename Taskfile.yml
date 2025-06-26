@@ -3,7 +3,7 @@ version: '3'
 
 vars:
   PROJECT_NAME: sentiment-tracker
-  PYTHON_VERSION: "3.9" # Updated to match Dockerfile
+  PYTHON_VERSION: "3.11" # Updated to match CI and dataclass slots requirement
   VENV_DIR: .venv
   PIP_CMD: "{{.VENV_DIR}}/bin/pip"
   PYTHON_CMD: "{{.VENV_DIR}}/bin/python"

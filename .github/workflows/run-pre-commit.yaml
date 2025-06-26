@@ -1,0 +1,41 @@
+name: "Run pre-commit"
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+
+jobs:
+  main:
+    name: Run pre-commit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Task
+        uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }} # Need to pass in secret so action is authenticated or you will get rate limited
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - run: task install
+      - name: Create test .env
+        run: |
+          echo "SLACK_BOT_TOKEN=xoxb-test-token" >> .env
+          echo "SLACK_SIGNING_SECRET=test-signing-secret" >> .env
+          echo "OPENAI_API_KEY=test-key" >> .env
+          echo "SLACK_BOLT_TEST_MODE=1" >> .env
+          echo "SLACK_BOLT_TOKEN_VERIFICATION_ENABLED=false" >> .env
+          echo "SLACK_SDK_TEST_MODE=1" >> .env
+      - uses: pre-commit/action@v3.0.1
+        env:
+          SLACK_BOT_TOKEN: "xoxb-test-token"
+          SLACK_SIGNING_SECRET: "test-signing-secret"
+          OPENAI_API_KEY: "test-key"
+          SLACK_BOLT_TEST_MODE: "1"
+          SLACK_BOLT_TOKEN_VERIFICATION_ENABLED: "false"
+          SLACK_SDK_TEST_MODE: "1"

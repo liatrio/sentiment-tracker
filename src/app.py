@@ -3,6 +3,9 @@ import logging
 import os
 import re
 import uuid  # For generating unique session IDs
+
+# Load environment variables
+GATHER_FEEDBACK_COMMAND = os.getenv("GATHER_FEEDBACK_COMMAND", "/gather-feedback")
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, Dict, Optional
 
@@ -34,10 +37,18 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Initialize the app with the bot token and enable message listening
+# Determine if token verification should be disabled (useful for CI/test mode)
+_token_verification_enabled_env = os.getenv(
+    "SLACK_BOLT_TOKEN_VERIFICATION_ENABLED", "true"
+).lower()
+# Treat any value other than explicit "false" (case-insensitive) as truthy
+_token_verification_enabled = _token_verification_enabled_env != "false"
+
 app = App(
     token=os.environ.get("SLACK_BOT_TOKEN"),
     # Process all messages, not just those that mention the bot
     process_before_response=True,
+    token_verification_enabled=_token_verification_enabled,
 )
 
 
@@ -201,13 +212,15 @@ def _help_text() -> str:
 
     return (
         "*Sentiment-Bot – Quick, Anonymous Team Feedback*\n\n"
-        "This bot helps teams gather candid sentiment and theme insights so you can act fast and continuously improve.\n\n"
-        "*How to use*:\n"
-        "• `@sentiment-bot help` — show this help message.\n"
-        "• `/gather-feedback from <@user-group> [on <topic>] [for <minutes> minutes]` — DM everyone in the user group a survey modal, collect their anonymous feedback, and post a summary back to the channel.\n\n"
-        "Examples:\n"
-        "• `/gather-feedback from @design` — ask the *design* group for feedback (default 10 min).\n"
-        "• `/gather-feedback for @frontend on Sprint 42 for 15 minutes` — ask *frontend* for feedback about *Sprint 42* for 15 min."
+        "This bot lets you collect short, candid feedback and see an anonymised summary in minutes.\n\n"
+        "*Core commands*\n"
+        "• `@sentiment-bot help` — show this message.\n"
+        f"• `{GATHER_FEEDBACK_COMMAND} from <@user-group> [on <topic>] [for <minutes> minutes|mins?]` — DM **only** members of the given user-group.\n"
+        f"• `{GATHER_FEEDBACK_COMMAND} on <topic> [for <minutes> minutes|mins?]` — DM **everyone in the current channel**.\n\n"
+        "**Examples:**\n"
+        f"• `{GATHER_FEEDBACK_COMMAND} from @design` — ask @design for feedback (defaults to 5 min).\n"
+        f"• `{GATHER_FEEDBACK_COMMAND} on last week's retro` — poll the whole channel about last week's retro (5 min).\n"
+        f"• `{GATHER_FEEDBACK_COMMAND} from @frontend on sprint 42 for 15 minutes` — target @frontend, topic *sprint 42*, 15 min window.\n"
     )
 
 
@@ -231,12 +244,12 @@ def process_gather_feedback_request(
     logger: logging.Logger,
     respond: Respond,
 ):
-    """Processes the core logic of the /gather-feedback command in a background thread."""
+    """Processes the core logic of the gather-feedback command in a background thread."""
     try:
         user_id = command["user_id"]
         command_text = command.get("text", "")
         logger.info(
-            f"Processing /gather-feedback from user '{user_id}' with text: '{command_text}'"
+            f"Processing {GATHER_FEEDBACK_COMMAND} from user '{user_id}' with text: '{command_text}'",
         )
 
         # Matches:
@@ -254,8 +267,142 @@ def process_gather_feedback_request(
         match = pattern.search(command_text)
 
         if not match:
+            # ------------------------------------------------------------------
+            # Fallback: gather feedback from the *whole channel*.
+            # Expected syntax:
+            #   on <reason> [for|in <minutes> minutes]
+            # The leading "on" is required to avoid ambiguity with future
+            # extensions, but we accept it being omitted to keep UX smooth.
+            # ------------------------------------------------------------------
+            channel_pattern = re.compile(
+                r"(?:on\s+)?(.*?)(?:\s+(?:for|in)\s+(-?\d+)\s+(?:minutes?|mins?))?$",
+                re.IGNORECASE,
+            )
+            ch_match = channel_pattern.search(command_text)
+            if not ch_match:
+                respond(
+                    f"I'm sorry, I didn't understand that. Use either `{GATHER_FEEDBACK_COMMAND} from @user-group [for X min]` "
+                    f"or `{GATHER_FEEDBACK_COMMAND} on <reason> [for X min]`"
+                )
+                return
+
+            reason_raw = ch_match.group(1)
+            time_in_minutes_str = ch_match.group(2)
+            reason = reason_raw.strip() if reason_raw else None
+
+            # Validate time (reuse logic)
+            time_in_minutes = 0
+            if time_in_minutes_str:
+                try:
+                    time_in_minutes = int(time_in_minutes_str)
+                    if time_in_minutes <= 0:
+                        logger.warning(
+                            f"Invalid time '{time_in_minutes_str}' for {GATHER_FEEDBACK_COMMAND} by user '{user_id}'. Time must be positive."
+                        )
+                        respond("The time must be a positive number of minutes.")
+                        return
+                except ValueError:
+                    logger.warning(
+                        f"Invalid time format '{time_in_minutes_str}' for {GATHER_FEEDBACK_COMMAND} by user '{user_id}'."
+                    )
+                    respond("Oops! The time specified must be a valid number.")
+                    return
+            else:
+                default_session_minutes_str = os.environ.get(
+                    "DEFAULT_SESSION_MINUTES", "5"
+                )
+                try:
+                    time_in_minutes = int(default_session_minutes_str)
+                    if time_in_minutes <= 0:
+                        logger.error(
+                            f"Invalid DEFAULT_SESSION_MINUTES '{default_session_minutes_str}'. Falling back to 5."
+                        )
+                        time_in_minutes = 5
+                except (ValueError, TypeError):
+                    logger.error(
+                        f"Invalid DEFAULT_SESSION_MINUTES '{default_session_minutes_str}'. Falling back to 5 minutes."
+                    )
+                    time_in_minutes = 5
+
+            channel_id = command.get("channel_id")
+            try:
+                from src.slack_bot.utils import get_channel_members
+
+                member_user_ids = get_channel_members(client, channel_id)
+                if not member_user_ids:
+                    respond(
+                        "I couldn't find any active members in this channel to invite."
+                    )
+                    return
+            except SlackApiError as exc:
+                logger.error(
+                    "Failed to fetch channel members for %s: %s",
+                    channel_id,
+                    exc,
+                    exc_info=True,
+                )
+                respond(
+                    "Sorry, I wasn't able to fetch channel members. Please try again later."
+                )
+                return
+
+            # Reuse common session creation logic.
+            session_id = str(uuid.uuid4())
+            initiator_user_id = user_id
+
+            new_session = SessionData(
+                session_id=session_id,
+                initiator_user_id=initiator_user_id,
+                channel_id=channel_id,
+                target_user_ids=member_user_ids,
+                time_limit_minutes=time_in_minutes,
+                reason=reason,
+            )
+            session_store.add_session(new_session)
+
+            invite_blocks = build_invitation_message(
+                session_id=session_id,
+                initiator_user_id=initiator_user_id,
+                channel_id=channel_id,
+                reason=reason,
+            )
+            failures = 0
+            for target_user_id in member_user_ids:
+                try:
+                    client.chat_postMessage(
+                        channel=target_user_id,
+                        text="You have been invited to provide feedback.",
+                        blocks=invite_blocks,
+                    )
+                except SlackApiError as exc:
+                    failures += 1
+                    logger.warning(
+                        "Failed to send feedback invitation to %s in session %s: %s",
+                        target_user_id,
+                        session_id,
+                        exc.response.get("error", str(exc)),
+                    )
+
+            # Schedule expiry & reminders
+            delay_seconds = time_in_minutes * 60
+            scheduler.schedule(
+                delay_seconds,
+                _expire_feedback_session,
+                session_id,
+                initiator_user_id,
+                client,
+            )
+            if delay_seconds > 60:
+                scheduler.schedule(
+                    delay_seconds - 60,
+                    _send_pending_reminder,
+                    session_id,
+                    client,
+                )
+
             respond(
-                "I'm sorry, I didn't understand that. Please use the format: `/gather-feedback from @user-group [for X min]`"
+                f"Okay, I've initiated a feedback session (ID: {session_id}) with {len(member_user_ids)} participant(s) "
+                f"for {time_in_minutes} minutes. I'll reach out to them shortly."
             )
             return
 
@@ -275,7 +422,7 @@ def process_gather_feedback_request(
                 time_in_minutes = int(time_in_minutes_str)
                 if time_in_minutes <= 0:
                     logger.warning(
-                        f"Invalid time '{time_in_minutes_str}' for /gather-feedback by user '{user_id}'. Time must be a positive integer."
+                        f"Invalid time '{time_in_minutes_str}' for {GATHER_FEEDBACK_COMMAND} by user '{user_id}'. Time must be a positive integer."
                     )
                     respond("The time must be a positive number of minutes.")
                     return
@@ -301,11 +448,11 @@ def process_gather_feedback_request(
                 time_in_minutes = 5
 
         logger.info(
-            f"Parsed for /gather-feedback from user '{user_id}': group_id='{user_group_id}', handle='{user_group_handle}', time: {time_in_minutes} minutes"
+            f"Parsed for {GATHER_FEEDBACK_COMMAND} from user '{user_id}': group_id='{user_group_id}', handle='{user_group_handle}', time: {time_in_minutes} minutes"
         )
         if reason:
             logger.info(
-                f"Parsed for /gather-feedback from user '{user_id}': reason='{reason}'"
+                f"Parsed for {GATHER_FEEDBACK_COMMAND} from user '{user_id}': reason='{reason}'",
             )
 
         # Fetch user IDs from the user group
@@ -414,7 +561,7 @@ def process_gather_feedback_request(
 
     except Exception as e:
         logger.error(
-            f"Error processing /gather-feedback request for user '{command.get('user_id', 'unknown')}': {e}",
+            f"Error processing {GATHER_FEEDBACK_COMMAND} request for user '{command.get('user_id', 'unknown')}': {e}",
             exc_info=True,
         )
         respond(
@@ -442,7 +589,7 @@ def submit_background(func, /, *args, **kwargs) -> Future:  # noqa: WPS110
     return fut
 
 
-@app.command("/gather-feedback")
+@app.command(GATHER_FEEDBACK_COMMAND)
 def handle_gather_feedback_command(
     ack: Ack,
     command: Dict[str, Any],
@@ -450,7 +597,7 @@ def handle_gather_feedback_command(
     logger: logging.Logger,
     respond: Respond,
 ):
-    """Handles the /gather-feedback slash command to initiate feedback collection."""
+    """Handles the gather-feedback slash command to initiate feedback collection."""
     ack()
     try:
         # Submit the long-running task to the thread pool
@@ -462,12 +609,12 @@ def handle_gather_feedback_command(
             respond=respond,
         )
         logger.info(
-            f"Submitted /gather-feedback request for user '{command['user_id']}' to thread pool."
+            f"Submitted {GATHER_FEEDBACK_COMMAND} request for user '{command['user_id']}' to thread pool."
         )
 
     except Exception as e:
         logger.error(
-            f"Error submitting /gather-feedback for user '{command['user_id']}' to thread pool: {e}",
+            f"Error submitting {GATHER_FEEDBACK_COMMAND} for user '{command['user_id']}' to thread pool: {e}",
             exc_info=True,
         )
         respond("Sorry, there was an issue submitting your request. Please try again.")

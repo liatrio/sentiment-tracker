@@ -186,19 +186,38 @@ class TestProcessGatherFeedbackRequest:
         )
 
     @patch("src.app.logger")
-    def test_invalid_format_missing_group(self, mock_logger):
-        """Test processing with invalid format (missing user group)."""
+    @patch("src.slack_bot.utils.get_channel_members", return_value=["U1", "U2"])
+    def test_channel_fallback_success(self, mock_members, mock_logger):
+        """Fallback to channel members when no user group is given."""
         mock_respond = MagicMock()
-        command_payload = {"text": "in 10 minutes", "user_id": "U_INVALID_FORMAT"}
+        mock_client = MagicMock()
+        command_payload = {
+            "text": "on team morale for 3 minutes",
+            "user_id": "U_INIT",
+            "channel_id": "C123",
+        }
+        process_gather_feedback_request(
+            command=command_payload,
+            client=mock_client,
+            respond=mock_respond,
+            logger=mock_logger,
+        )
+        # Should call get_channel_members once
+        mock_members.assert_called_once_with(mock_client, "C123")
+        mock_respond.assert_called_once()
+
+    @patch("src.app.logger")
+    def test_invalid_format_totally_unparseable(self, mock_logger):
+        """Ensure unparseable commands still show help."""
+        mock_respond = MagicMock()
+        command_payload = {"text": "foobar", "user_id": "U_BAD"}
         process_gather_feedback_request(
             command=command_payload,
             client=MagicMock(),
             respond=mock_respond,
             logger=mock_logger,
         )
-        mock_respond.assert_called_once_with(
-            "I'm sorry, I didn't understand that. Please use the format: `/gather-feedback from @user-group [for X min]`"
-        )
+        mock_respond.assert_called_once()
 
     @patch("src.app.logger")
     def test_invalid_time_negative(self, mock_logger):

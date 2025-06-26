@@ -12,7 +12,7 @@ repos:
     rev: 23.3.0 # Match the version in requirements-dev.txt
     hooks:
     -   id: black
-        language_version: python3.9 # Ensure it uses the correct Python version
+        language_version: python3.11 # Ensure it uses the correct Python version
 
 -   repo: https://github.com/pycqa/isort
     rev: 5.12.0 # Match the version in requirements-dev.txt
@@ -36,11 +36,10 @@ repos:
         args: ["--cov=src", "--cov-fail-under=80"]
         pass_filenames: false
         stages: [commit]
-
-# mypy hook can be added if desired, but sometimes it's slower and run separately
-# -   repo: https://github.com/pre-commit/mirrors-mypy
-#     rev: 'v1.3.0'  # Match your mypy version
-#     hooks:
-#     -   id: mypy
-#         args: [--config-file=pyproject.toml]
-#         # exclude: ^tests/ # if you don't want to type-check tests initially
+        env:
+          SLACK_BOT_TOKEN: xoxb-test-token
+          SLACK_SIGNING_SECRET: test-signing-secret
+          OPENAI_API_KEY: test-key
+          SLACK_BOLT_TEST_MODE: "1"
+          SLACK_SDK_TEST_MODE: "1"
+          SLACK_BOLT_TOKEN_VERIFICATION_ENABLED: "false"

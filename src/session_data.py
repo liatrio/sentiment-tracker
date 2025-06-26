@@ -5,7 +5,7 @@ from typing import List, Optional, Set
 class SessionData:
     """Represents the data and lifecycle of a feedback session.
 
-    A *session* is created when someone invokes `/gather-feedback` for a set of
+    A *session* is created when someone invokes the gather-feedback command for a set of
     participants (``target_user_ids``).  Each participant may submit feedback
     **once**.  The session automatically completes when either all
     participants have submitted or it expires after ``time_limit_minutes``.
