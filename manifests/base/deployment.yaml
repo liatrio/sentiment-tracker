@@ -48,5 +48,3 @@ spec:
               value: gpt-4.1
             - name: DEFAULT_SESSION_MINUTES
               value: "10"
-
-              

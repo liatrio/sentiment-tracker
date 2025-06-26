@@ -41,5 +41,3 @@ patches:
             value:
               extract:
                 key: openai
-
-                
