@@ -4,7 +4,7 @@ resources:
 - ../../base
 images:
 - name: ghcr.io/liatrio/sentiment-tracker
-  newTag: v0.1.5
+  newTag: v0.2.2
 
 patches:
     - target:
