@@ -32,6 +32,14 @@ jobs:
             kustomize edit set image $IMAGE
           )
 
+      - name: Kustomize Set Image - PROD
+        run: |
+          (
+            cd manifests/overlays/prod;
+            IMAGE=ghcr.io/${{ github.repository }}:${{ steps.calculate_new_version.outputs.new_tag }} ;
+            kustomize edit set image $IMAGE
+          )
+
       - uses: octo-sts/action@6177b4481c00308b3839969c3eca88c96a91775f # v1.0.0
         id: octo-sts
         with:
