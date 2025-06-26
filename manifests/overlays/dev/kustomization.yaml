@@ -4,37 +4,37 @@ resources:
 - ../../base
 images:
 - name: ghcr.io/liatrio/sentiment-tracker
-  newTag: v0.1.5
+  newTag: v0.2.0
 
 patches:
-    - target:
-          kind: Deployment
-          name: sentiment-bot
-      patch: |-
-          - op: replace
-            path: /spec/template/spec/containers/0/env/0/valueFrom/secretKeyRef/name
-            value: sentiment-bot-secrets-dev
-          - op: replace
-            path: /spec/template/spec/containers/0/env/1/valueFrom/secretKeyRef/name
-            value: sentiment-bot-secrets-dev
-          - op: replace
-            path: /spec/template/spec/containers/0/env/2/valueFrom/secretKeyRef/name
-            value: sentiment-bot-secrets-dev
-    - target:
-          kind: ExternalSecret
-          name: sentiment-bot-external-secret
-      patch: |-
-          - op: replace
-            path: /spec/target/name
-            value: sentiment-bot-secrets-dev
-          - op: replace
-            path: /spec/secretStoreRef/name
-            value: sentiment-bot-kv-dev
-          - op: replace
-            path: /spec/dataFrom/0/extract/key
-            value: slack
-          - op: add
-            path: /spec/dataFrom/-
-            value:
-              extract:
-                key: openai
+- patch: |-
+    - op: replace
+      path: /spec/template/spec/containers/0/env/0/valueFrom/secretKeyRef/name
+      value: sentiment-bot-secrets-dev
+    - op: replace
+      path: /spec/template/spec/containers/0/env/1/valueFrom/secretKeyRef/name
+      value: sentiment-bot-secrets-dev
+    - op: replace
+      path: /spec/template/spec/containers/0/env/2/valueFrom/secretKeyRef/name
+      value: sentiment-bot-secrets-dev
+  target:
+    kind: Deployment
+    name: sentiment-bot
+- patch: |-
+    - op: replace
+      path: /spec/target/name
+      value: sentiment-bot-secrets-dev
+    - op: replace
+      path: /spec/secretStoreRef/name
+      value: sentiment-bot-kv-dev
+    - op: replace
+      path: /spec/dataFrom/0/extract/key
+      value: slack
+    - op: add
+      path: /spec/dataFrom/-
+      value:
+        extract:
+          key: openai
+  target:
+    kind: ExternalSecret
+    name: sentiment-bot-external-secret
