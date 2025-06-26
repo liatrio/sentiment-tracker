@@ -3,9 +3,6 @@ import logging
 import os
 import re
 import uuid  # For generating unique session IDs
-
-# Load environment variables
-GATHER_FEEDBACK_COMMAND = os.getenv("GATHER_FEEDBACK_COMMAND", "/gather-feedback")
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, Dict, Optional
 
@@ -28,6 +25,9 @@ from .scheduler import Scheduler
 
 # Load environment variables from .env file
 load_dotenv()
+
+# Load environment variables (after .env is loaded)
+GATHER_FEEDBACK_COMMAND = os.getenv("GATHER_FEEDBACK_COMMAND", "/gather-feedback")
 
 # Set up logging
 logging_level = os.environ.get("SLACK_LOG_LEVEL", "INFO")

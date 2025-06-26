@@ -2,6 +2,7 @@
 import os
 from unittest.mock import MagicMock, patch
 
+import src.app as app
 from src.app import process_gather_feedback_request  # Import the worker function
 from src.app import (
     custom_error_handler,
@@ -78,7 +79,7 @@ def test_handle_gather_feedback_command_submits_to_executor(mock_logger, mock_ex
         respond=mock_respond,
     )
     mock_logger.info.assert_called_once_with(
-        "Submitted /gather-feedback request for user 'U_TESTER' to thread pool."
+        f"Submitted {app.GATHER_FEEDBACK_COMMAND} request for user 'U_TESTER' to thread pool."
     )
 
 
@@ -105,7 +106,7 @@ def test_handle_gather_feedback_command_submission_error(mock_logger, mock_execu
         "Sorry, there was an issue submitting your request. Please try again."
     )
     mock_logger.error.assert_called_once_with(
-        "Error submitting /gather-feedback for user 'U_ERROR_USER' to thread pool: Pool is closed",
+        f"Error submitting {app.GATHER_FEEDBACK_COMMAND} for user 'U_ERROR_USER' to thread pool: Pool is closed",
         exc_info=True,
     )
 
@@ -153,7 +154,7 @@ class TestProcessGatherFeedbackRequest:
         assert added_session.session_id == session_id
         assert added_session.time_limit_minutes == 5  # Default time
         mock_logger.info.assert_any_call(
-            "Parsed for /gather-feedback from user 'U_VALID_GROUP_ONLY': group_id='SGROUPID', handle='test-group', time: 5 minutes"
+            f"Parsed for {app.GATHER_FEEDBACK_COMMAND} from user 'U_VALID_GROUP_ONLY': group_id='SGROUPID', handle='test-group', time: 5 minutes"
         )
 
     @patch("src.app.uuid.uuid4")
@@ -259,7 +260,7 @@ class TestProcessGatherFeedbackRequest:
             "Sorry, an unexpected error occurred while processing your request. Please try again."
         )
         mock_logger.error.assert_called_once_with(
-            f"Error processing /gather-feedback request for user 'U_EXCEPTION': {test_exception}",
+            f"Error processing {app.GATHER_FEEDBACK_COMMAND} request for user 'U_EXCEPTION': {test_exception}",
             exc_info=True,
         )
 
@@ -287,7 +288,7 @@ class TestProcessGatherFeedbackRequest:
         added_session = mock_session_store.add_session.call_args[0][0]
         assert added_session.time_limit_minutes == 10
         mock_logger.info.assert_any_call(
-            "Parsed for /gather-feedback from user 'U_INITIATOR': group_id='SGROUPID', handle='group', time: 10 minutes"
+            f"Parsed for {app.GATHER_FEEDBACK_COMMAND} from user 'U_INITIATOR': group_id='SGROUPID', handle='group', time: 10 minutes"
         )
 
 
