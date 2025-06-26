@@ -1,21 +1,23 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: slackbot
+  name: sentiment-bot
   labels:
-    app: slackbot
+    app: sentiment-bot
+  annotations:
+    reloader.stakater.com/auto: "true"
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: slackbot
+      app: sentiment-bot
   template:
     metadata:
       labels:
-        app: slackbot
+        app: sentiment-bot
     spec:
       containers:
-        - name: slackbot
+        - name: sentiment-bot
           image: ghcr.io/liatrio/sentiment-tracker # Tag gets set in CI workflow file: .github/workflows/build-push.yamlh
           resources:
             requests:
@@ -24,3 +26,27 @@ spec:
             limits:
               cpu: "500m"
               memory: "512Mi"
+          envFrom:
+            - configMapRef:
+                name: sentiment-bot-config
+          env:
+            - name: SLACK_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: sentiment-bot-secrets
+                  key: BOT_TOKEN
+            - name: SLACK_APP_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: sentiment-bot-secrets
+                  key: SLACK_APP_TOKEN
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: sentiment-bot-secrets
+                  key: OPENAI_API_KEY
+            - name: OPENAI_MODEL
+              value: gpt-4.1
+            - name: DEFAULT_SESSION_MINUTES
+              value: "10"
+              

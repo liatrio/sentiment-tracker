@@ -13,23 +13,23 @@ patches:
       patch: |-
           - op: replace
             path: /spec/template/spec/containers/0/env/0/valueFrom/secretKeyRef/name
-            value: sentiment-bot-secrets-dev
+            value: sentiment-bot-secrets-prod
           - op: replace
             path: /spec/template/spec/containers/0/env/1/valueFrom/secretKeyRef/name
-            value: sentiment-bot-secrets-dev
+            value: sentiment-bot-secrets-prod
           - op: replace
             path: /spec/template/spec/containers/0/env/2/valueFrom/secretKeyRef/name
-            value: sentiment-bot-secrets-dev
+            value: sentiment-bot-secrets-prod
     - target:
           kind: ExternalSecret
           name: sentiment-bot-external-secret
       patch: |-
           - op: replace
             path: /spec/target/name
-            value: sentiment-bot-secrets-dev
+            value: sentiment-bot-secrets-prod
           - op: replace
             path: /spec/secretStoreRef/name
-            value: sentiment-bot-kv-dev
+            value: sentiment-bot-kv-prod
           - op: replace
             path: /spec/dataFrom/0/extract/key
             value: slack
@@ -38,3 +38,5 @@ patches:
             value:
               extract:
                 key: openai
+
+                
