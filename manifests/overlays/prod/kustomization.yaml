@@ -20,6 +20,9 @@ patches:
           - op: replace
             path: /spec/template/spec/containers/0/env/2/valueFrom/secretKeyRef/name
             value: sentiment-bot-secrets-prod
+          - op: replace
+            path: /spec/template/spec/containers/0/env/3/value
+            value: /gather-feedback
     - target:
           kind: ExternalSecret
           name: sentiment-bot-external-secret

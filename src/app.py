@@ -3,6 +3,9 @@ import logging
 import os
 import re
 import uuid  # For generating unique session IDs
+
+# Load environment variables
+GATHER_FEEDBACK_COMMAND = os.getenv("GATHER_FEEDBACK_COMMAND", "/gather-feedback")
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, Dict, Optional
 
@@ -212,12 +215,12 @@ def _help_text() -> str:
         "This bot lets you collect short, candid feedback and see an anonymised summary in minutes.\n\n"
         "*Core commands*\n"
         "• `@sentiment-bot help` — show this message.\n"
-        "• `/gather-feedback from <@user-group> [on <topic>] [for <minutes> minutes|mins?]` — DM **only** members of the given user-group.\n"
-        "• `/gather-feedback on <topic> [for <minutes> minutes|mins?]` — DM **everyone in the current channel**.\n\n"
-        "*Examples*\n"
-        "• `/gather-feedback from @design` — ask @design for feedback (defaults to 5 min).\n"
-        "• `/gather-feedback on last week’s retro` — poll the whole channel about last week’s retro (5 min).\n"
-        "• `/gather-feedback from @frontend on sprint 42 for 15 minutes` — target @frontend, topic *sprint 42*, 15 min window.\n"
+        f"• `{GATHER_FEEDBACK_COMMAND} from <@user-group> [on <topic>] [for <minutes> minutes|mins?]` — DM **only** members of the given user-group.\n"
+        f"• `{GATHER_FEEDBACK_COMMAND} on <topic> [for <minutes> minutes|mins?]` — DM **everyone in the current channel**.\n\n"
+        "**Examples:**\n"
+        f"• `{GATHER_FEEDBACK_COMMAND} from @design` — ask @design for feedback (defaults to 5 min).\n"
+        f"• `{GATHER_FEEDBACK_COMMAND} on last week's retro` — poll the whole channel about last week's retro (5 min).\n"
+        f"• `{GATHER_FEEDBACK_COMMAND} from @frontend on sprint 42 for 15 minutes` — target @frontend, topic *sprint 42*, 15 min window.\n"
     )
 
 
@@ -241,12 +244,12 @@ def process_gather_feedback_request(
     logger: logging.Logger,
     respond: Respond,
 ):
-    """Processes the core logic of the /gather-feedback command in a background thread."""
+    """Processes the core logic of the gather-feedback command in a background thread."""
     try:
         user_id = command["user_id"]
         command_text = command.get("text", "")
         logger.info(
-            f"Processing /gather-feedback from user '{user_id}' with text: '{command_text}'"
+            f"Processing {GATHER_FEEDBACK_COMMAND} from user '{user_id}' with text: '{command_text}'",
         )
 
         # Matches:
@@ -278,8 +281,8 @@ def process_gather_feedback_request(
             ch_match = channel_pattern.search(command_text)
             if not ch_match:
                 respond(
-                    "I'm sorry, I didn't understand that. Use either `/gather-feedback from @user-group [for X min]` "
-                    "or `/gather-feedback on <reason> [for X min]`"
+                    f"I'm sorry, I didn't understand that. Use either `{GATHER_FEEDBACK_COMMAND} from @user-group [for X min]` "
+                    f"or `{GATHER_FEEDBACK_COMMAND} on <reason> [for X min]`"
                 )
                 return
 
@@ -294,13 +297,13 @@ def process_gather_feedback_request(
                     time_in_minutes = int(time_in_minutes_str)
                     if time_in_minutes <= 0:
                         logger.warning(
-                            f"Invalid time '{time_in_minutes_str}' for /gather-feedback by user '{user_id}'. Time must be positive."
+                            f"Invalid time '{time_in_minutes_str}' for {GATHER_FEEDBACK_COMMAND} by user '{user_id}'. Time must be positive."
                         )
                         respond("The time must be a positive number of minutes.")
                         return
                 except ValueError:
                     logger.warning(
-                        f"Invalid time format '{time_in_minutes_str}' for /gather-feedback by user '{user_id}'."
+                        f"Invalid time format '{time_in_minutes_str}' for {GATHER_FEEDBACK_COMMAND} by user '{user_id}'."
                     )
                     respond("Oops! The time specified must be a valid number.")
                     return
@@ -419,7 +422,7 @@ def process_gather_feedback_request(
                 time_in_minutes = int(time_in_minutes_str)
                 if time_in_minutes <= 0:
                     logger.warning(
-                        f"Invalid time '{time_in_minutes_str}' for /gather-feedback by user '{user_id}'. Time must be a positive integer."
+                        f"Invalid time '{time_in_minutes_str}' for {GATHER_FEEDBACK_COMMAND} by user '{user_id}'. Time must be a positive integer."
                     )
                     respond("The time must be a positive number of minutes.")
                     return
@@ -445,11 +448,11 @@ def process_gather_feedback_request(
                 time_in_minutes = 5
 
         logger.info(
-            f"Parsed for /gather-feedback from user '{user_id}': group_id='{user_group_id}', handle='{user_group_handle}', time: {time_in_minutes} minutes"
+            f"Parsed for {GATHER_FEEDBACK_COMMAND} from user '{user_id}': group_id='{user_group_id}', handle='{user_group_handle}', time: {time_in_minutes} minutes"
         )
         if reason:
             logger.info(
-                f"Parsed for /gather-feedback from user '{user_id}': reason='{reason}'"
+                f"Parsed for {GATHER_FEEDBACK_COMMAND} from user '{user_id}': reason='{reason}'",
             )
 
         # Fetch user IDs from the user group
@@ -558,7 +561,7 @@ def process_gather_feedback_request(
 
     except Exception as e:
         logger.error(
-            f"Error processing /gather-feedback request for user '{command.get('user_id', 'unknown')}': {e}",
+            f"Error processing {GATHER_FEEDBACK_COMMAND} request for user '{command.get('user_id', 'unknown')}': {e}",
             exc_info=True,
         )
         respond(
@@ -586,7 +589,7 @@ def submit_background(func, /, *args, **kwargs) -> Future:  # noqa: WPS110
     return fut
 
 
-@app.command("/gather-feedback")
+@app.command(GATHER_FEEDBACK_COMMAND)
 def handle_gather_feedback_command(
     ack: Ack,
     command: Dict[str, Any],
@@ -594,7 +597,7 @@ def handle_gather_feedback_command(
     logger: logging.Logger,
     respond: Respond,
 ):
-    """Handles the /gather-feedback slash command to initiate feedback collection."""
+    """Handles the gather-feedback slash command to initiate feedback collection."""
     ack()
     try:
         # Submit the long-running task to the thread pool
@@ -606,12 +609,12 @@ def handle_gather_feedback_command(
             respond=respond,
         )
         logger.info(
-            f"Submitted /gather-feedback request for user '{command['user_id']}' to thread pool."
+            f"Submitted {GATHER_FEEDBACK_COMMAND} request for user '{command['user_id']}' to thread pool."
         )
 
     except Exception as e:
         logger.error(
-            f"Error submitting /gather-feedback for user '{command['user_id']}' to thread pool: {e}",
+            f"Error submitting {GATHER_FEEDBACK_COMMAND} for user '{command['user_id']}' to thread pool: {e}",
             exc_info=True,
         )
         respond("Sorry, there was an issue submitting your request. Please try again.")

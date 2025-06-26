@@ -26,15 +26,12 @@ spec:
             limits:
               cpu: "500m"
               memory: "512Mi"
-          envFrom:
-            - configMapRef:
-                name: sentiment-bot-config
           env:
             - name: SLACK_BOT_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: sentiment-bot-secrets
-                  key: BOT_TOKEN
+                  key: SLACK_BOT_TOKEN
             - name: SLACK_APP_TOKEN
               valueFrom:
                 secretKeyRef:
@@ -45,8 +42,11 @@ spec:
                 secretKeyRef:
                   name: sentiment-bot-secrets
                   key: OPENAI_API_KEY
+            - name: GATHER_FEEDBACK_COMMAND
+              value: "/gather-feedback"
             - name: OPENAI_MODEL
               value: gpt-4.1
             - name: DEFAULT_SESSION_MINUTES
               value: "10"
+
               
