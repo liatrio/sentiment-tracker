@@ -97,18 +97,29 @@ def post_report_to_slack(
 
     parent_ts = parent_resp["ts"]
     report_text = render_report(processed)
+    report_len = len(report_text)
+    logger.debug(
+        "Report generated for session=%s channel=%s len=%d",
+        processed.session_id,
+        channel,
+        report_len,
+    )
 
     # ------------------------------------------------------------------
     # 2. Post threaded report (message or file)
     # ------------------------------------------------------------------
 
-    if len(report_text) < 2800:
+    if report_len < 2800:
+        logger.debug("Posting report as chat message (len=%d < 2800)", report_len)
         client.chat_postMessage(
             channel=channel,
             text=report_text,
             thread_ts=parent_ts,
         )
     else:
+        logger.debug(
+            "Uploading report as file (len=%d >= 2800) via files_upload_v2", report_len
+        )
         # Upload as a file if too long using the modern Slack endpoint
         client.files_upload_v2(
             channels=channel,
