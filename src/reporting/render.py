@@ -109,7 +109,7 @@ def post_report_to_slack(
     # 2. Post threaded report (message or file)
     # ------------------------------------------------------------------
 
-    if report_len < 2800:
+    if report_len < 12000:
         logger.debug("Posting report as chat message (len=%d < 2800)", report_len)
         client.chat_postMessage(
             channel=channel,
