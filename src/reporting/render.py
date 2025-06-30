@@ -122,7 +122,7 @@ def post_report_to_slack(
         )
         # Upload as a file if too long using the modern Slack endpoint
         client.files_upload_v2(
-            channels=channel,
+            channel=channel,
             title=f"Feedback Report {processed.session_id}",
             content=report_text,
             filename=f"feedback_{processed.session_id}.md",
